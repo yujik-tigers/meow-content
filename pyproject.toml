@@ -1,5 +1,5 @@
 [project]
-name = "daily-cat-mailing-content"
+name = "meow-content"
 version = "0.1.0"
 description = ""
 authors = [
@@ -10,9 +10,9 @@ requires-python = ">=3.13,<4.0.0"
 dependencies = [
     "fastapi (>=0.128.0,<0.129.0)",
     "langchain-openai (>=1.1.7,<2.0.0)",
-    "zenquotespy (>=1.0.0,<2.0.0)",
     "langchain (>=1.2.3,<2.0.0)",
-    "uvicorn (>=0.40.0,<0.41.0)"
+    "uvicorn (>=0.40.0,<0.41.0)",
+    "langchain-community (>=0.4.1,<0.5.0)"
 ]
 
 

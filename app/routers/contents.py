@@ -15,18 +15,12 @@ router = APIRouter(prefix="/contents", tags=["contents"])
 async def create_content(
     image_creator: Annotated[ImageCreator, Depends(inject_image_creator)],
     date: date,
-    width: int = 800,
-    height: int = 600,
 ) -> FileResponse:
     """
     Create content for the given date with specified width and height.
     """
-    file_path = (
-        f"{os.getcwd()}/app/images/{date.strftime('%Y%m%d')}_{width}x{height}.png"
-    )
-    image_bytes = await image_creator.create_image(
-        width=width, height=height, quote="Cats are great companions."
-    )
+    file_path = f"{os.getcwd()}/app/images/{date.strftime('%Y%m%d')}.png"
+    image_bytes = await image_creator.create_image(quote="Cats are great companions.")
     with open(file_path, "wb") as f:
         f.write(image_bytes)
     return FileResponse(

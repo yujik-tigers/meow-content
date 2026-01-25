@@ -1,35 +1,48 @@
 import base64
 
-from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+import requests
+
+from app.settings import app_config
 
 
 class ImageCreator:
     """A class to create images based on quotes using an LLM."""
 
-    async def create_image(self, width: int, height: int, quote: str) -> bytes:
-        """
-        Create a simple PNG image with the given width, height, and quote text.
-        """
+    async def create_image(self, quote: str) -> bytes:
+        prompt = f"""
+Please create a cat image that matches the given quote. 
+Please include the quote naturally just once, like an internet meme.
 
-        prompt_template = PromptTemplate.from_template(
-            """
-    Create a cat PNG image of size {width}x{height} that matches the given quote.
-    Quote should be clearly visible on the image.
-    Answer it BASE64 ENCODED PNG IMAGE DATA ONLY.
-
-    # Quote "{quote}"
+# Quote:
+{quote}
     """
+
+        url = f"https://api.cloudflare.com/client/v4/accounts/{app_config.CLOUDFLARE_ACCOUNT_ID}/ai/run/{app_config.CLOUDFLARE_IMAGE_GEN_MODEL}"
+        headers = {
+            "Authorization": f"Bearer {app_config.CLOUDFLARE_API_KEY}",
+        }
+        form = {
+            "prompt": prompt,
+            "steps": 20,
+            "width": 1024,
+            "height": 1024,
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            data=form,
         )
+        response.raise_for_status()
 
-        llm = ChatOpenAI(model="gpt-5")
+        result = response.json()
 
-        chain = prompt_template | llm
-
-        response = await chain.ainvoke(
-            {"width": width, "height": height, "quote": quote}
-        )
-        return base64.b64decode(response.text)
+        base_64 = result.get("result", {}).get("image")
+        try:
+            return base64.b64decode(base_64)
+        except Exception as e:
+            print(f"Error decoding base64 image: {e}")
+            raise
 
 
 image_creator = ImageCreator()
