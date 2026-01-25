@@ -24,8 +24,10 @@ Please include the quote naturally just once, like an internet meme.
         form = {
             "prompt": prompt,
             "steps": 20,
-            "width": 1024,
-            "height": 1024,
+            # "width": 1024,
+            # "height": 1024,
+            "wdith": 512,
+            "height": 512,
         }
 
         response = requests.post(
