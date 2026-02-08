@@ -1,16 +1,27 @@
 import base64
+from abc import ABC, abstractmethod
+from typing import override
 
 import requests
+from google import genai
 
 from app.settings import app_config
 
 
-class ImageCreator:
+class ImageCreator(ABC):
     """A class to create images based on quotes using an LLM."""
 
+    @abstractmethod
+    async def create_image(self, quote: str) -> bytes:
+        pass
+
+
+class CloudflareImageCreator(ImageCreator):
+
+    @override
     async def create_image(self, quote: str) -> bytes:
         prompt = f"""
-Please create a cat image that matches the given quote. 
+Please create a cat image that matches the given quote.
 Please include the quote naturally just once, like an internet meme.
 
 # Quote:
@@ -24,9 +35,7 @@ Please include the quote naturally just once, like an internet meme.
         form = {
             "prompt": prompt,
             "steps": 20,
-            # "width": 1024,
-            # "height": 1024,
-            "wdith": 512,
+            "width": 512,
             "height": 512,
         }
 
@@ -47,4 +56,31 @@ Please include the quote naturally just once, like an internet meme.
             raise
 
 
-image_creator = ImageCreator()
+class GeminiImageCreator(ImageCreator):
+
+    @override
+    async def create_image(self, quote: str) -> bytes:
+        client = genai.Client()
+        prompt = f"""
+Please create a cat image that matches the given quote.
+Please include the quote naturally just once, like an internet meme.
+
+# Quote:
+{quote}
+        """
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-image",
+            contents=[prompt],
+        )
+
+        if response.parts is not None:
+            for part in response.parts:
+                if part.inline_data is not None:
+                    generate_image = part.inline_data.data
+                    if generate_image is not None:
+                        return generate_image
+
+        raise ValueError("No image data found in the response.")
+
+
+image_creator = GeminiImageCreator()

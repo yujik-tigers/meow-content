@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     CLOUDFLARE_ACCOUNT_ID: str
     CLOUDFLARE_IMAGE_GEN_MODEL: str
 
+    GEMINI_API_KEY: str
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
