@@ -28,6 +28,7 @@ async def create_content(
             path=file_path,
             media_type="image/png",
         )
+
     image_bytes = await image_creator.create_image(quote=daily_quote)
     with open(file_path, "wb") as f:
         f.write(image_bytes)
