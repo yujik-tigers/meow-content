@@ -44,6 +44,7 @@ jobs:
       - name: Add Runner IP to Security Group
         run: |
           aws ec2 authorize-security-group-ingress \
+            --region ap-northeast-2 \
             --group-id ${{ secrets.EC2_SG_ID }} \
             --protocol tcp --port 22 \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32
@@ -74,6 +75,7 @@ jobs:
         if: always() # Ensure this runs even if deployment fails
         run: |
           aws ec2 revoke-security-group-ingress \
+            --region ap-northeast-2 \
             --group-id ${{ secrets.EC2_SG_ID }} \
             --protocol tcp --port 22 \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32
