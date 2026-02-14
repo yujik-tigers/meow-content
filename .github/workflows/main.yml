@@ -3,8 +3,6 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
   build-and-push:
@@ -73,9 +71,14 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
             
             # 새 컨테이너 실행
-            docker run -d --name meow-content -p 8000:8000 --env-file .env.tmp ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest 
+            docker run -d \
+              --name meow-content \
+              -p 8000:8000 \
+              -v /meow-content/images:/app/images \
+              --env-file .env.tmp \
+              ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
 
-            rm .env.tmp
+            rm -f .env.tmp
 
       - name: Remove Runner IP from Security Group
         if: always() # Ensure this runs even if deployment fails
