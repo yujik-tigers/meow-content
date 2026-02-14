@@ -47,10 +47,15 @@ jobs:
             # 기존 컨테이너 중지 및 삭제
             docker stop meow-content || true
             docker rm meow-content || true
+
+            # .env 파일 생성
+            echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.tmp
             
             # 최신 이미지 Pull
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
             
             # 새 컨테이너 실행
-            docker run -d --name meow-content -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
+            docker run -d --name meow-content -p 8000:8000 --env-file .env.tmp ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest 
+
+            rm .env.tmp
 
