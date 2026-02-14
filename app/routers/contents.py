@@ -23,6 +23,11 @@ async def create_content(
     Create content for the given date with specified width and height.
     """
     file_path = f"{os.getcwd()}/app/images/{request.created_at.strftime('%Y%m%d')}.png"
+    if os.path.exists(file_path):
+        return FileResponse(
+            path=file_path,
+            media_type="image/png",
+        )
     image_bytes = await image_creator.create_image(quote=daily_quote)
     with open(file_path, "wb") as f:
         f.write(image_bytes)
