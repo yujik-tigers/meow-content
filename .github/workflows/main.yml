@@ -75,7 +75,7 @@ jobs:
               --name meow-content \
               --network meow-network \
               -p 8000:8000 \
-              -v /meow-content/images:/app/images \
+              -v ~/meow-content/images:/code/app/images \
               --env-file .env.tmp \
               ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
 

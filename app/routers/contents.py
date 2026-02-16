@@ -12,7 +12,9 @@ from app.schemas.contents import CreateContentRequest
 router = APIRouter(prefix="/contents", tags=["contents"])
 
 
-@router.post("", responses={200: {"content": {"image/png": {}}}})
+@router.post(
+    "", response_class=FileResponse, responses={200: {"content": {"image/png": {}}}}
+)
 async def create_content(
     image_creator: Annotated[ImageCreator, Depends(inject_image_creator)],
     daily_quote: Annotated[str, Depends(inject_daily_quote)],
