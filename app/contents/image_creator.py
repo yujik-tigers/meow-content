@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import override
 
 import requests
-from google import genai
+from google.genai import Client, types
 
 from app.settings import app_config
 
@@ -60,7 +60,7 @@ class GeminiImageCreator(ImageCreator):
 
     @override
     async def create_image(self, quote: str) -> bytes:
-        client = genai.Client()
+        client = Client()
         prompt = f"""
 Please create a cat image that matches the given quote.
 Please include the quote naturally just once, like an internet meme.
@@ -69,8 +69,11 @@ Please include the quote naturally just once, like an internet meme.
 {quote}
         """
         response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
+            model="gemini-3-pro-image-preview",
             contents=[prompt],
+            config=types.GenerateContentConfig(
+                image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+            ),
         )
 
         if response.parts is not None:
