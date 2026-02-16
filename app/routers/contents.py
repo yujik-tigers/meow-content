@@ -1,3 +1,4 @@
+import datetime
 import os
 from typing import Annotated
 
@@ -11,9 +12,7 @@ from app.schemas.contents import CreateContentRequest
 router = APIRouter(prefix="/contents", tags=["contents"])
 
 
-@router.post(
-    "/", response_class=FileResponse, responses={200: {"content": {"image/png": {}}}}
-)
+@router.post("", responses={200: {"content": {"image/png": {}}}})
 async def create_content(
     image_creator: Annotated[ImageCreator, Depends(inject_image_creator)],
     daily_quote: Annotated[str, Depends(inject_daily_quote)],
@@ -36,3 +35,9 @@ async def create_content(
         path=file_path,
         media_type="image/png",
     )
+
+
+@router.get("/test")
+async def route_path_test(date: datetime.date) -> dict:
+    file_path = f"{os.getcwd()}/app/images/{date.strftime('%Y%m%d')}.png"
+    return {"file_path": file_path, "exists": os.path.exists(file_path)}
