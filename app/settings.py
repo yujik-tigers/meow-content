@@ -10,6 +10,9 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str
 
+    MEME_FONT_PATH: str
+    MEME_FONT_PATH_KOR: str
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

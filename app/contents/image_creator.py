@@ -21,8 +21,8 @@ class CloudflareImageCreator(ImageCreator):
     @override
     async def create_image(self, quote: str) -> bytes:
         prompt = f"""
-Please create a cat image that matches the given quote.
-Please include the quote naturally just once, like an internet meme.
+Please create a cat image that matches the mood and theme of the given quote.
+Do not include any text in the image.
 
 # Quote:
 {quote}
@@ -50,10 +50,12 @@ Please include the quote naturally just once, like an internet meme.
 
         base_64 = result.get("result", {}).get("image")
         try:
-            return base64.b64decode(base_64)
+            image_bytes = base64.b64decode(base_64)
         except Exception as e:
             print(f"Error decoding base64 image: {e}")
             raise
+
+        return image_bytes
 
 
 class GeminiImageCreator(ImageCreator):
@@ -62,8 +64,8 @@ class GeminiImageCreator(ImageCreator):
     async def create_image(self, quote: str) -> bytes:
         client = Client()
         prompt = f"""
-Please create a cat image that matches the given quote.
-Please include the quote naturally just once, like an internet meme.
+Please create a cat image that matches the mood and theme of the given quote.
+Do not include any text in the image.
 
 # Quote:
 {quote}
@@ -79,9 +81,9 @@ Please include the quote naturally just once, like an internet meme.
         if response.parts is not None:
             for part in response.parts:
                 if part.inline_data is not None:
-                    generate_image = part.inline_data.data
-                    if generate_image is not None:
-                        return generate_image
+                    image_bytes = part.inline_data.data
+                    if image_bytes is not None:
+                        return image_bytes
 
         raise ValueError("No image data found in the response.")
 
