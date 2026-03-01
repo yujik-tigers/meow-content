@@ -3,6 +3,7 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
+from app.contents.quote_creator import Quote
 from app.settings import app_config
 
 MAX_LINES = 2
@@ -40,12 +41,13 @@ def _wrap_text(
     return lines
 
 
-def add_meme_text(image_bytes: bytes, text: str) -> bytes:
+def add_quote(image_bytes: bytes, quote: Quote) -> bytes:
     """Overlay meme-style text on the image: all-caps, white fill, black stroke, centered at bottom."""
     img = Image.open(BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
     width, height = img.size
 
+    text = quote.text
     korean = _is_korean(text)
     font_path = app_config.MEME_FONT_PATH_KOR if korean else app_config.MEME_FONT_PATH
 
@@ -72,8 +74,16 @@ def add_meme_text(image_bytes: bytes, text: str) -> bytes:
 
     lines = lines[:MAX_LINES]
 
+    speaker_font_size = max(MIN_FONT_SIZE, int(font_size * 0.65))
+    try:
+        speaker_font = ImageFont.truetype(font_path, speaker_font_size)
+    except Exception:
+        speaker_font = ImageFont.load_default(size=speaker_font_size)
+    speaker_text = f"- {quote.speaker} -"
+    speaker_line_spacing = int(speaker_font_size * 1.15)
+
     line_spacing = int(font_size * 1.15)
-    total_text_height = line_spacing * len(lines)
+    total_text_height = line_spacing * len(lines) + speaker_line_spacing
     margin = int(height * 0.03)
     y = height - total_text_height - margin
     stroke_width = max(2, font_size // 14)
@@ -91,6 +101,18 @@ def add_meme_text(image_bytes: bytes, text: str) -> bytes:
             stroke_fill="black",
         )
         y += line_spacing
+
+    speaker_stroke_width = max(1, speaker_font_size // 14)
+    speaker_bbox = draw.textbbox((0, 0), speaker_text, font=speaker_font)
+    speaker_x = (width - (speaker_bbox[2] - speaker_bbox[0])) / 2
+    draw.text(
+        (speaker_x, y),
+        speaker_text,
+        font=speaker_font,
+        fill="white",
+        stroke_width=speaker_stroke_width,
+        stroke_fill="black",
+    )
 
     output = BytesIO()
     img.save(output, format="PNG")
