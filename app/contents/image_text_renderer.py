@@ -60,7 +60,7 @@ def add_quote(image_bytes: bytes, quote: Quote) -> bytes:
     max_width = int(width * 0.9)
 
     # Shrink font until text fits within MAX_LINES
-    font: ImageFont.FreeTypeFont | ImageFont.ImageFont
+    font = ImageFont.load_default(size=font_size)
     lines: list[str] = []
     while font_size >= MIN_FONT_SIZE:
         try:

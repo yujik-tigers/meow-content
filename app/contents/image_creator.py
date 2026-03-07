@@ -1,75 +1,106 @@
-import base64
 from abc import ABC, abstractmethod
+from datetime import date
 from typing import override
 
-import requests
 from google.genai import Client, types
 
-from app.settings import app_config
+from app.contents import image_retriever, image_text_renderer, quote_translator
+from app.contents.enums import LanguageCode
+from app.contents.quote_creator import Quote
 
 
-class ImageCreator(ABC):
-    """A class to create images based on quotes using an LLM."""
+class ContentCreator(ABC):
+    """A class to create content based on quotes using an LLM."""
+
+    def __init__(self):
+        self.prompt = """
+Please create a cat image that matches the mood and theme of the given quote.
+Do not include any text in the image.
+
+# Quote:
+{quote}
+"""
 
     @abstractmethod
-    async def create_image(self, quote: str) -> bytes:
+    async def create(
+        self, quote: Quote, language_code: LanguageCode, date: date
+    ) -> str:
+        """
+        Create content based on the given quote, language code, and date.
+        Return the file path of the created content.
+        """
         pass
 
 
-class CloudflareImageCreator(ImageCreator):
+# class CloudflareContentCreator(ContentCreator):
+
+#     @override
+#     async def create(self, quote: str, language_code: LanguageCode) -> str:
+
+#         url = f"https://api.cloudflare.com/client/v4/accounts/{app_config.CLOUDFLARE_ACCOUNT_ID}/ai/run/{app_config.CLOUDFLARE_IMAGE_GEN_MODEL}"
+#         headers = {
+#             "Authorization": f"Bearer {app_config.CLOUDFLARE_API_KEY}",
+#         }
+#         form = {
+#             "prompt": self.prompt.format(quote=quote),
+#             "steps": 20,
+#             "width": 512,
+#             "height": 512,
+#         }
+
+#         response = requests.post(
+#             url,
+#             headers=headers,
+#             data=form,
+#         )
+#         response.raise_for_status()
+
+#         result = response.json()
+
+#         base_64 = result.get("result", {}).get("image")
+#         try:
+#             image_bytes = base64.b64decode(base_64)
+#         except Exception as e:
+#             print(f"Error decoding base64 image: {e}")
+#             raise
+
+#         return image_bytes
+
+
+class GeminiContentCreator(ContentCreator):
 
     @override
-    async def create_image(self, quote: str) -> bytes:
-        prompt = f"""
-Please create a cat image that matches the mood and theme of the given quote.
-Do not include any text in the image.
+    async def create(
+        self, quote: Quote, language_code: LanguageCode, date: date
+    ) -> str:
+        if language_code != LanguageCode.ENGLISH:
+            quote.text = await quote_translator.translate(
+                quote_text=quote.text, target_language_code=language_code
+            )
 
-# Quote:
-{quote}
-    """
-
-        url = f"https://api.cloudflare.com/client/v4/accounts/{app_config.CLOUDFLARE_ACCOUNT_ID}/ai/run/{app_config.CLOUDFLARE_IMAGE_GEN_MODEL}"
-        headers = {
-            "Authorization": f"Bearer {app_config.CLOUDFLARE_API_KEY}",
-        }
-        form = {
-            "prompt": prompt,
-            "steps": 20,
-            "width": 512,
-            "height": 512,
-        }
-
-        response = requests.post(
-            url,
-            headers=headers,
-            data=form,
-        )
-        response.raise_for_status()
-
-        result = response.json()
-
-        base_64 = result.get("result", {}).get("image")
-        try:
-            image_bytes = base64.b64decode(base_64)
-        except Exception as e:
-            print(f"Error decoding base64 image: {e}")
-            raise
-
-        return image_bytes
-
-
-class GeminiImageCreator(ImageCreator):
-
-    @override
-    async def create_image(self, quote: str) -> bytes:
         client = Client()
-        prompt = f"""
-Please create a cat image that matches the mood and theme of the given quote.
-Do not include any text in the image.
+        prompt = self.prompt.format(quote=quote)
 
-# Quote:
-{quote}
-        """
+        if not image_retriever.is_exist(LanguageCode.NONE, date):
+            base_image = await self._create_image(client=client, prompt=prompt)
+            await self._save_image(
+                image_bytes=base_image, language_code=LanguageCode.NONE, date=date
+            )
+
+        if language_code == LanguageCode.NONE:
+            return image_retriever.get_image_path(LanguageCode.NONE, date)
+
+        base_image = image_retriever.retrieve(LanguageCode.NONE, date)
+        await self._save_image(
+            image_bytes=image_text_renderer.add_quote(
+                image_bytes=base_image, quote=quote
+            ),
+            language_code=language_code,
+            date=date,
+        )
+        return image_retriever.get_image_path(language_code, date)
+
+    async def _create_image(self, client: Client, prompt: str) -> bytes:
         response = client.models.generate_content(
             model="gemini-3-pro-image-preview",
             contents=[prompt],
@@ -87,5 +118,14 @@ Do not include any text in the image.
 
         raise ValueError("No image data found in the response.")
 
+    async def _save_image(
+        self, image_bytes: bytes, language_code: LanguageCode, date: date
+    ) -> None:
+        file_path = image_retriever.get_image_path(
+            language_code=language_code, date=date
+        )
+        with open(file_path, "wb") as f:
+            f.write(image_bytes)
 
-image_creator = GeminiImageCreator()
+
+content_creator = GeminiContentCreator()
