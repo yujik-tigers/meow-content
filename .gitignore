@@ -2,4 +2,5 @@
 .venv
 __pycache__/
 .DS_Store
-app/images/
+app/images/*
+!app/images/meme_example*.jpeg

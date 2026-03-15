@@ -1,6 +1,8 @@
 import os
 from datetime import date
 
+from PIL import Image
+
 from app.contents.enums import LanguageCode
 
 
@@ -21,3 +23,7 @@ def retrieve(language_code: LanguageCode, date: date) -> bytes:
         with open(file_path, "rb") as f:
             return f.read()
     raise FileNotFoundError("Image not found")
+
+
+def retrieve_meme_sample(number: int | None = None) -> Image.Image:
+    return Image.open(f"{os.getcwd()}/app/images/meme_example{number or ''}.jpeg")

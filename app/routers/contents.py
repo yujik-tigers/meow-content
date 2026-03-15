@@ -16,7 +16,9 @@ router = APIRouter(prefix="/contents", tags=["contents"])
 
 
 @router.post(
-    "", response_class=FileResponse, responses={200: {"content": {"image/png": {}}}}
+    "/quotes",
+    response_class=FileResponse,
+    responses={200: {"content": {"image/png": {}}}},
 )
 async def create_content(
     content_creator: Annotated[ContentCreator, Depends(inject_content_creator)],
@@ -32,8 +34,36 @@ async def create_content(
             media_type="image/png",
         )
 
-    content_file_path = await content_creator.create(
+    content_file_path = await content_creator.create_quote_image(
         quote=daily_quote, language_code=request.language, date=request.created_at
+    )
+
+    return FileResponse(
+        path=content_file_path,
+        media_type="image/png",
+    )
+
+
+@router.post(
+    "/memes",
+    response_class=FileResponse,
+    responses={200: {"content": {"image/jpeg": {}}}},
+)
+async def create_meme(
+    content_creator: Annotated[ContentCreator, Depends(inject_content_creator)],
+    request: CreateContentRequest,
+) -> FileResponse:
+    """
+    Create meme for the given date.
+    """
+    if image_retriever.is_exist(request.language, request.created_at):
+        return FileResponse(
+            path=image_retriever.get_image_path(request.language, request.created_at),
+            media_type="image/jpeg",
+        )
+
+    content_file_path = await content_creator.create_meme(
+        language_code=request.language, date=request.created_at
     )
 
     return FileResponse(

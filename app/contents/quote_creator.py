@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-import requests
+import httpx
 
 
 @dataclass
@@ -10,7 +10,8 @@ class Quote:
 
 
 async def create_daily_quote() -> Quote:
-    response = requests.get("https://zenquotes.io/api/today")
+    async with httpx.AsyncClient() as client:
+        response = await client.get("https://zenquotes.io/api/today")
     response.raise_for_status()
     response_json = response.json()
     return Quote(

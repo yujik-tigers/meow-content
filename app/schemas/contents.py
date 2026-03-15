@@ -7,4 +7,4 @@ from app.contents.enums import LanguageCode
 @dataclass
 class CreateContentRequest:
     created_at: date
-    language: LanguageCode = LanguageCode.ENGLISH
+    language: LanguageCode

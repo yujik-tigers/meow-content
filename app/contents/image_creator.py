@@ -4,7 +4,12 @@ from typing import override
 
 from google.genai import Client, types
 
-from app.contents import image_retriever, image_text_renderer, quote_translator
+from app.contents import (
+    cataas_client,
+    image_retriever,
+    image_text_renderer,
+    quote_translator,
+)
 from app.contents.enums import LanguageCode
 from app.contents.quote_creator import Quote
 
@@ -13,7 +18,7 @@ class ContentCreator(ABC):
     """A class to create content based on quotes using an LLM."""
 
     def __init__(self):
-        self.prompt = """
+        self.quote_generate_prompt = """
 Please create a cat image that matches the mood and theme of the given quote.
 Do not include any text in the image.
 
@@ -22,12 +27,20 @@ Do not include any text in the image.
 """
 
     @abstractmethod
-    async def create(
+    async def create_quote_image(
         self, quote: Quote, language_code: LanguageCode, date: date
     ) -> str:
         """
         Create content based on the given quote, language code, and date.
         Return the file path of the created content.
+        """
+        pass
+
+    @abstractmethod
+    async def create_meme(self, language_code: LanguageCode, date: date) -> str:
+        """
+        Create meme content.
+        Return the file path of the created meme content.
         """
         pass
 
@@ -70,7 +83,7 @@ Do not include any text in the image.
 class GeminiContentCreator(ContentCreator):
 
     @override
-    async def create(
+    async def create_quote_image(
         self, quote: Quote, language_code: LanguageCode, date: date
     ) -> str:
         if language_code != LanguageCode.ENGLISH:
@@ -79,10 +92,17 @@ class GeminiContentCreator(ContentCreator):
             )
 
         client = Client()
-        prompt = self.prompt.format(quote=quote)
+        prompt = self.quote_generate_prompt.format(quote=quote)
 
         if not image_retriever.is_exist(LanguageCode.NONE, date):
-            base_image = await self._create_image(client=client, prompt=prompt)
+            response = client.models.generate_content(
+                model="gemini-3-pro-image-preview",
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+                ),
+            )
+            base_image = self._parse_image_response(response)
             await self._save_image(
                 image_bytes=base_image, language_code=LanguageCode.NONE, date=date
             )
@@ -100,15 +120,44 @@ class GeminiContentCreator(ContentCreator):
         )
         return image_retriever.get_image_path(language_code, date)
 
-    async def _create_image(self, client: Client, prompt: str) -> bytes:
+    @override
+    async def create_meme(self, language_code: LanguageCode, date: date) -> str:
+        client = Client()
+
+        if not image_retriever.is_exist(LanguageCode.NONE, date):
+            base_image = await cataas_client.get_daily_cat_image()
+            await self._save_image(
+                image_bytes=base_image, language_code=LanguageCode.NONE, date=date
+            )
+
+        if language_code == LanguageCode.NONE:
+            return image_retriever.get_image_path(LanguageCode.NONE, date)
+
+        base_image = image_retriever.retrieve(LanguageCode.NONE, date)
         response = client.models.generate_content(
             model="gemini-3-pro-image-preview",
-            contents=[prompt],
+            contents=[
+                "예시 이미지:",
+                image_retriever.retrieve_meme_sample(),
+                image_retriever.retrieve_meme_sample(number=2),
+                image_retriever.retrieve_meme_sample(number=3),
+                image_retriever.retrieve_meme_sample(number=4),
+                f"""위 예시처럼, 아래의 이미지에 알맞는 멘트를 생각해서, 고양이 얼굴을 가리지 않는 선에서 말풍선과 {language_code.to_language_name()} 텍스트를 추가해줘.
+                요즘 젠지새대들의 트렌드에 맞는 밈스러운 텍스트로 넣어줘. 반드시 맞춤법을 지킬 필요는 없어.
+                """,
+                types.Part.from_bytes(data=base_image, mime_type="image/jpeg"),
+            ],
             config=types.GenerateContentConfig(
-                image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+                response_modalities=["text", "image"],
             ),
         )
+        meme_image = self._parse_image_response(response=response)
+        await self._save_image(
+            image_bytes=meme_image, language_code=language_code, date=date
+        )
+        return image_retriever.get_image_path(language_code, date)
 
+    def _parse_image_response(self, response: types.GenerateContentResponse) -> bytes:
         if response.parts is not None:
             for part in response.parts:
                 if part.inline_data is not None:
