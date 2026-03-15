@@ -8,6 +8,7 @@ from app.contents import (
     cataas_client,
     image_retriever,
     image_text_renderer,
+    meme_text_generator,
     quote_translator,
 )
 from app.contents.enums import LanguageCode
@@ -25,6 +26,9 @@ Do not include any text in the image.
 # Quote:
 {quote}
 """
+        self.meme_generate_prompt = """
+Put the given text into speech bubbles in the given image.
+        """
 
     @abstractmethod
     async def create_quote_image(
@@ -133,19 +137,20 @@ class GeminiContentCreator(ContentCreator):
         if language_code == LanguageCode.NONE:
             return image_retriever.get_image_path(LanguageCode.NONE, date)
 
+        meme_text = await meme_text_generator.generate_speech_bubble_text(
+            image_bytes=image_retriever.retrieve(LanguageCode.NONE, date),
+            language_code=language_code,
+        )
+
         base_image = image_retriever.retrieve(LanguageCode.NONE, date)
         response = client.models.generate_content(
             model="gemini-3-pro-image-preview",
             contents=[
-                "예시 이미지:",
-                image_retriever.retrieve_meme_sample(),
-                image_retriever.retrieve_meme_sample(number=2),
-                image_retriever.retrieve_meme_sample(number=3),
-                image_retriever.retrieve_meme_sample(number=4),
-                f"""위 예시처럼, 아래의 이미지에 알맞는 멘트를 생각해서, 고양이 얼굴을 가리지 않는 선에서 말풍선과 {language_code.to_language_name()} 텍스트를 추가해줘.
-                요즘 젠지새대들의 트렌드에 맞는 밈스러운 텍스트로 넣어줘. 반드시 맞춤법을 지킬 필요는 없어.
-                """,
+                self.meme_generate_prompt,
+                "# Image:",
                 types.Part.from_bytes(data=base_image, mime_type="image/jpeg"),
+                "# Text:",
+                meme_text,
             ],
             config=types.GenerateContentConfig(
                 response_modalities=["text", "image"],
