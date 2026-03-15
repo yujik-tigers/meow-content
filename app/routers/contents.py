@@ -1,9 +1,12 @@
+import os
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 
 from app.contents import image_retriever
+from app.contents.enums import LanguageCode
 from app.contents.image_creator import ContentCreator
 from app.contents.quote_creator import Quote
 from app.dependencies import (
@@ -70,3 +73,19 @@ async def create_meme(
         path=content_file_path,
         media_type="image/png",
     )
+
+
+@router.delete(
+    "/{date}/{language_code}",
+    status_code=204,
+)
+async def delete_content(
+    date: datetime,
+    language_code: LanguageCode,
+) -> None:
+    """
+    Delete content for the given date and language code.
+    """
+    file_path = image_retriever.get_image_path(language_code=language_code, date=date)
+    if image_retriever.is_exist(language_code=language_code, date=date):
+        os.remove(file_path)
