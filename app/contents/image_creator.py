@@ -99,7 +99,7 @@ class GeminiContentCreator(ContentCreator):
         prompt = self.quote_generate_prompt.format(quote=quote)
 
         if not image_retriever.is_exist(LanguageCode.NONE, date):
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model="gemini-3-pro-image-preview",
                 contents=[prompt],
                 config=types.GenerateContentConfig(
@@ -143,7 +143,7 @@ class GeminiContentCreator(ContentCreator):
         )
 
         base_image = image_retriever.retrieve(LanguageCode.NONE, date)
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model="gemini-3-pro-image-preview",
             contents=[
                 self.meme_generate_prompt,
