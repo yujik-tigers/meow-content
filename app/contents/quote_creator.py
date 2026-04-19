@@ -1,12 +1,6 @@
-from dataclasses import dataclass
-
 import httpx
 
-
-@dataclass
-class Quote:
-    text: str
-    speaker: str
+from app.schemas.contents import Quote
 
 
 async def create_daily_quote() -> Quote:

@@ -1,10 +1,5 @@
-from app.contents.image_creator import ContentCreator, content_creator
-from app.contents.quote_creator import Quote, create_daily_quote
+from app.contents.quote_image_creator import QuoteImageCreator, quote_image_creator
 
 
-async def inject_content_creator() -> ContentCreator:
-    return content_creator
-
-
-async def inject_quote() -> Quote:
-    return await create_daily_quote()
+async def inject_quote_image_creator() -> QuoteImageCreator:
+    return quote_image_creator

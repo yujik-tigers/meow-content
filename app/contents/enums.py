@@ -14,3 +14,8 @@ class LanguageCode(str, Enum):
         if self == LanguageCode.NONE:
             return "None"
         raise ValueError(f"Unsupported language code: {self}")
+
+
+class ImageType(str, Enum):
+    QUOTE = "quote"
+    MEME = "meme"

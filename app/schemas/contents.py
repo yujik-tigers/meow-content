@@ -1,10 +1,20 @@
 from dataclasses import dataclass
 from datetime import date
 
-from app.contents.enums import LanguageCode
-
 
 @dataclass
 class CreateContentRequest:
     created_at: date
-    language: LanguageCode
+
+
+@dataclass
+class QuoteImagePaths:
+    base_image_path: str
+    quote_image_path: str
+    korean_quote_image_path: str
+
+
+@dataclass(frozen=True)
+class Quote:
+    text: str
+    speaker: str
