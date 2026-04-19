@@ -18,5 +18,16 @@
         "console": "integratedTerminal",
         "justMyCode": false
       },
+      {
+        "name": "Script: Load Korean Meme",
+        "type": "python",
+        "request": "launch",
+        "program": "${workspaceFolder}/scripts/load_korean_meme_script.py",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        },
+        "console": "integratedTerminal",
+        "justMyCode": false
+      },
     ]
   }

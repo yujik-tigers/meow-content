@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     MEME_FONT_PATH: str
     MEME_FONT_PATH_KOR: str
 
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_COLLECTION: str = "meme_keywords"
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
