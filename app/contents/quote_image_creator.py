@@ -2,13 +2,13 @@ from datetime import date
 
 from google.genai import Client, types
 
+from app.clients.zenquotes_client import Quote, create_daily_quote
 from app.contents import (
-    image_retriever,
+    image_manager,
     image_text_renderer,
     quote_translator,
 )
 from app.contents.enums import ImageType, LanguageCode
-from app.contents.quote_creator import Quote, create_daily_quote
 from app.schemas.contents import QuoteImagePaths
 
 
@@ -26,15 +26,15 @@ Put the given text into speech bubbles in the given image.
         """
 
     async def create(self, date: date) -> QuoteImagePaths:
-        if image_retriever.is_exist(LanguageCode.NONE, date, ImageType.QUOTE):
+        if image_manager.is_exist(LanguageCode.NONE, date, ImageType.QUOTE):
             return QuoteImagePaths(
-                base_image_path=image_retriever.get_image_path(
+                base_image_path=image_manager.find_image_path_by(
                     LanguageCode.NONE, date, ImageType.QUOTE
                 ),
-                quote_image_path=image_retriever.get_image_path(
+                quote_image_path=image_manager.find_image_path_by(
                     LanguageCode.ENGLISH, date, ImageType.QUOTE
                 ),
-                korean_quote_image_path=image_retriever.get_image_path(
+                korean_quote_image_path=image_manager.find_image_path_by(
                     LanguageCode.KOREAN, date, ImageType.QUOTE
                 ),
             )
@@ -53,14 +53,13 @@ Put the given text into speech bubbles in the given image.
             ),
         )
         base_image = self._parse_image_response(response)
-        await self._save_image(
+        base_image_path = image_manager.save_image(
             image_bytes=base_image,
             language_code=LanguageCode.NONE,
             date=date,
             image_type=ImageType.QUOTE,
         )
-
-        await self._save_image(
+        quote_image_path = image_manager.save_image(
             image_bytes=image_text_renderer.add_quote(
                 image_bytes=base_image, quote=quote
             ),
@@ -68,7 +67,7 @@ Put the given text into speech bubbles in the given image.
             date=date,
             image_type=ImageType.QUOTE,
         )
-        await self._save_image(
+        korean_quote_image_path = image_manager.save_image(
             image_bytes=image_text_renderer.add_quote(
                 image_bytes=base_image,
                 quote=Quote(text=korean_quote, speaker=quote.speaker),
@@ -78,15 +77,9 @@ Put the given text into speech bubbles in the given image.
             image_type=ImageType.QUOTE,
         )
         return QuoteImagePaths(
-            base_image_path=image_retriever.get_image_path(
-                LanguageCode.NONE, date, ImageType.QUOTE
-            ),
-            quote_image_path=image_retriever.get_image_path(
-                LanguageCode.ENGLISH, date, ImageType.QUOTE
-            ),
-            korean_quote_image_path=image_retriever.get_image_path(
-                LanguageCode.KOREAN, date, ImageType.QUOTE
-            ),
+            base_image_path=base_image_path,
+            quote_image_path=quote_image_path,
+            korean_quote_image_path=korean_quote_image_path,
         )
 
     def _parse_image_response(self, response: types.GenerateContentResponse) -> bytes:
@@ -98,19 +91,6 @@ Put the given text into speech bubbles in the given image.
                         return image_bytes
 
         raise ValueError("No image data found in the response.")
-
-    async def _save_image(
-        self,
-        image_bytes: bytes,
-        language_code: LanguageCode,
-        date: date,
-        image_type: ImageType,
-    ) -> None:
-        file_path = image_retriever.get_image_path(
-            language_code=language_code, date=date, image_type=image_type
-        )
-        with open(file_path, "wb") as f:
-            f.write(image_bytes)
 
 
 quote_image_creator = QuoteImageCreator()

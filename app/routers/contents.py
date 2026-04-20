@@ -5,11 +5,14 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
+from fastapi.responses import FileResponse
 
-from app.contents import image_retriever
+from app.contents import image_manager
 from app.contents.enums import ImageType, LanguageCode
+from app.contents.meme_image_creator import MemeImageCreator
 from app.contents.quote_image_creator import QuoteImageCreator
 from app.dependencies import (
+    inject_meme_image_creator,
     inject_quote_image_creator,
 )
 from app.schemas.contents import CreateContentRequest
@@ -75,45 +78,21 @@ async def create_content(
     )
 
 
-# @router.post(
-#     "/korean_memes",
-#     response_class=FileResponse,
-#     responses={200: {"content": {"image/jpeg": {}}}},
-# )
-# async def create_korean_meme(
-#     content_creator: Annotated[ContentCreator, Depends(inject_quote_image_creator)],
-#     request: CreateKoreanMemeRequest,
-# ) -> FileResponse:
-#     """
-#     Create korean meme for the given date.
-#     """
+@router.post(
+    "/korean_memes",
+    response_class=FileResponse,
+    responses={200: {"content": {"image/jpeg": {}}}},
+)
+async def create_korean_meme(
+    content_creator: Annotated[MemeImageCreator, Depends(inject_meme_image_creator)],
+    request: CreateContentRequest,
+) -> FileResponse:
+    image_path = await content_creator.create(request.created_at)
 
-#     if image_retriever.is_exist(LanguageCode.KOREAN, request.created_at):
-#         return FileResponse(
-#             path=image_retriever.get_image_path(
-#                 LanguageCode.KOREAN, request.created_at
-#             ),
-#             media_type="image/jpeg",
-#         )
-
-#     # Image Description
-
-#     # Vector DB search for meme keyword
-
-#     # Generate meme text with keyword based on the image and image description
-
-#     # Generate meme image with meme text
-
-#     # Evaluate the generated meme image
-
-#     content_file_path = await content_creator.create_meme(
-#         language_code=request.language, date=request.created_at
-#     )
-
-#     return FileResponse(
-#         path=content_file_path,
-#         media_type="image/png",
-#     )
+    return FileResponse(
+        path=image_path,
+        media_type="image/jpeg",
+    )
 
 
 @router.delete(
@@ -123,17 +102,19 @@ async def create_content(
 async def delete_content(
     date: datetime,
     language_code: LanguageCode,
+    image_type: ImageType,
 ) -> None:
     """
     Delete content for the given date and language code.
     """
-    file_path = image_retriever.get_image_path(
-        language_code=language_code, date=date, image_type=ImageType.QUOTE
-    )
-    if image_retriever.is_exist(
-        language_code=language_code, date=date, image_type=ImageType.QUOTE
+    if image_manager.is_exist(
+        language_code=language_code, date=date, image_type=image_type
     ):
-        os.remove(file_path)
+        os.remove(
+            image_manager.find_image_path_by(
+                language_code=language_code, date=date, image_type=image_type
+            )
+        )
 
 
 def generate_multipart(boundary: str, parts: list[tuple[str, str, str]]) -> bytes:

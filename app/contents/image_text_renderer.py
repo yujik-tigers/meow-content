@@ -3,7 +3,7 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.contents.quote_creator import Quote
+from app.clients.zenquotes_client import Quote
 from app.settings import app_config
 
 MAX_LINES = 2
@@ -116,4 +116,42 @@ def add_quote(image_bytes: bytes, quote: Quote) -> bytes:
 
     output = BytesIO()
     img.save(output, format="PNG")
+    return output.getvalue()
+
+
+def add_meme(image_bytes: bytes, meme_text: str) -> bytes:
+    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    width, height = img.size
+
+    korean = _is_korean(meme_text)
+    font_path = app_config.MEME_FONT_PATH_KOR if korean else app_config.MEME_FONT_PATH
+    font_size = max(28, width // 14)
+    padding = int(font_size * 0.6)
+    max_width = int(width * 0.9)
+
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except Exception:
+        font = ImageFont.load_default(size=font_size)
+
+    dummy_draw = ImageDraw.Draw(img)
+    lines = _wrap_text(dummy_draw, meme_text, font, max_width, korean)
+
+    line_spacing = int(font_size * 1.3)
+    bar_height = line_spacing * len(lines) + padding * 2
+
+    # Extend canvas downward with a black bar
+    new_img = Image.new("RGB", (width, height + bar_height), color="black")
+    new_img.paste(img, (0, 0))
+
+    draw = ImageDraw.Draw(new_img)
+    y = height + padding
+    for line in lines:
+        bbox = draw.textbbox((0, 0), line, font=font)
+        x = (width - (bbox[2] - bbox[0])) / 2
+        draw.text((x, y), line, font=font, fill="white")
+        y += line_spacing
+
+    output = BytesIO()
+    new_img.save(output, format="PNG")
     return output.getvalue()
