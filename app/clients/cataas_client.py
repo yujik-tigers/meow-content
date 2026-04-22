@@ -16,7 +16,7 @@ async def get_daily_cat_image(date: date) -> bytes:
         language_code=LanguageCode.NONE, date=date, image_type=ImageType.MEME
     ):
         base_image_path = image_manager.find_image_path_by(
-            language_code=LanguageCode.NONE, date=date, image_type=ImageType.CAT
+            language_code=LanguageCode.NONE, date=date, image_type=ImageType.MEME
         )
         with open(base_image_path, "rb") as f:
             return f.read()
