@@ -7,6 +7,21 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  mysql:
+    container_name: meow-mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: meow
+      MYSQL_USER: meow
+      MYSQL_PASSWORD: meow
+      MYSQL_CHARSET: utf8mb4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
   # app:
   #   container_name: meow-app
   #   build: .
@@ -15,6 +30,8 @@ services:
   #   env_file: .env
   #   depends_on:
   #     - qdrant
+  #     - mysql
 
 volumes:
   qdrant_data:
+  mysql_data:

@@ -6,16 +6,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import FileResponse
+from starlette import status
 
-from app.contents import image_manager
+from app.contents import image_manager, meme_analyzer
 from app.contents.enums import ImageType, LanguageCode
 from app.contents.meme_image_creator import MemeImageCreator
 from app.contents.quote_image_creator import QuoteImageCreator
+from app.db.repository import MemeRepository
 from app.dependencies import (
     inject_meme_image_creator,
+    inject_meme_repository,
     inject_quote_image_creator,
 )
-from app.schemas.contents import CreateContentRequest
+from app.schemas.common import ApiResponse
+from app.schemas.contents import CreateContentRequest, MemeCandidate
 
 router = APIRouter(prefix="/contents", tags=["contents"])
 
@@ -115,6 +119,19 @@ async def delete_content(
                 language_code=language_code, date=date, image_type=image_type
             )
         )
+
+
+@router.post("/memes/analyze", status_code=status.HTTP_201_CREATED)
+async def analyze_meme(
+    meme_candidate: MemeCandidate,
+    repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
+) -> ApiResponse[int]:
+    analysis_result = await meme_analyzer.analyze_meme(meme_candidate.image_url)
+    save_id = await repository.save(meme_candidate, analysis_result)
+
+    return ApiResponse(
+        status_code=status.HTTP_201_CREATED, status_message="CREATED", content=save_id
+    )
 
 
 def generate_multipart(boundary: str, parts: list[tuple[str, str, str]]) -> bytes:
