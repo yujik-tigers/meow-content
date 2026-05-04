@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.contents.meme_image_creator import MemeImageCreator, meme_image_creator
 from app.contents.quote_image_creator import QuoteImageCreator, quote_image_creator

@@ -1,8 +1,13 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date
 
+from sqlmodel import col, select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.contents.enums import MemeStatus
 from app.contents.meme_analyzer import MemeAnalyzeResult
 from app.db.models import MemeRecord
-from app.schemas.contents import MemeCandidate
+from app.exceptions import NoApprovedMemeError
+from app.schemas.contents import MemeCandidate, MemeContent
 
 
 class MemeRepository:
@@ -27,3 +32,27 @@ class MemeRepository:
 
         assert record.id is not None
         return record.id
+
+    async def fetch_approved_and_mark_used(self, used_at: date) -> MemeContent:
+        result = await self._session.exec(
+            select(MemeRecord)
+            .where(col(MemeRecord.status) == MemeStatus.APPROVED)
+            .limit(1)
+        )
+        record = result.first()
+        if record is None:
+            raise NoApprovedMemeError()
+
+        record.status = MemeStatus.USED
+        record.used_at = used_at
+        await self._session.commit()
+
+        return MemeContent(
+            image_url=record.img_url,
+            meme_text=record.meme_text,
+            source=record.source,
+            author=record.author,
+            expressions=record.expressions,
+            translation=record.translation,
+            background=record.background,
+        )

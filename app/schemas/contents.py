@@ -1,10 +1,4 @@
 from dataclasses import dataclass
-from datetime import date
-
-
-@dataclass
-class CreateContentRequest:
-    created_at: date
 
 
 @dataclass
@@ -36,3 +30,14 @@ class MemeAnalysisResult:
     expressions: str
     translation: str
     background: str | None
+
+
+@dataclass(frozen=True)
+class MemeContent:
+    image_url: str
+    meme_text: str
+    source: str
+    author: str
+    expressions: str
+    translation: str
+    background: None | str

@@ -8,7 +8,7 @@ from app.contents import (
     image_text_renderer,
     quote_translator,
 )
-from app.contents.enums import ImageType, LanguageCode
+from app.contents.enums import ImageType
 from app.schemas.contents import QuoteImagePaths
 
 
@@ -26,21 +26,19 @@ Put the given text into speech bubbles in the given image.
         """
 
     async def create(self, date: date) -> QuoteImagePaths:
-        if image_manager.is_exist(LanguageCode.NONE, date, ImageType.QUOTE):
+        if image_manager.is_exist(date, ImageType.QUOTE):
             return QuoteImagePaths(
-                base_image_path=image_manager.find_image_path_by(
-                    LanguageCode.NONE, date, ImageType.QUOTE
-                ),
+                base_image_path=image_manager.find_image_path_by(date, ImageType.QUOTE),
                 quote_image_path=image_manager.find_image_path_by(
-                    LanguageCode.ENGLISH, date, ImageType.QUOTE
+                    date, ImageType.QUOTE
                 ),
                 korean_quote_image_path=image_manager.find_image_path_by(
-                    LanguageCode.KOREAN, date, ImageType.QUOTE
+                    date, ImageType.QUOTE
                 ),
             )
 
         quote = await create_daily_quote()
-        korean_quote = await quote_translator.translate(quote.text, LanguageCode.KOREAN)
+        korean_quote = await quote_translator.translate(quote.text)
 
         client = Client()
         prompt = self.quote_generate_prompt.format(quote=quote)
@@ -55,7 +53,6 @@ Put the given text into speech bubbles in the given image.
         base_image = self._parse_image_response(response)
         base_image_path = image_manager.save_image(
             image_bytes=base_image,
-            language_code=LanguageCode.NONE,
             date=date,
             image_type=ImageType.QUOTE,
         )
@@ -63,7 +60,6 @@ Put the given text into speech bubbles in the given image.
             image_bytes=image_text_renderer.add_quote(
                 image_bytes=base_image, quote=quote
             ),
-            language_code=LanguageCode.ENGLISH,
             date=date,
             image_type=ImageType.QUOTE,
         )
@@ -72,7 +68,6 @@ Put the given text into speech bubbles in the given image.
                 image_bytes=base_image,
                 quote=Quote(text=korean_quote, speaker=quote.speaker),
             ),
-            language_code=LanguageCode.KOREAN,
             date=date,
             image_type=ImageType.QUOTE,
         )

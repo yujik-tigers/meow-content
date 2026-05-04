@@ -12,7 +12,7 @@ from langchain_openai import ChatOpenAI
 
 from app.clients import cataas_client
 from app.contents import image_manager, image_text_renderer
-from app.contents.enums import ImageType, LanguageCode
+from app.contents.enums import ImageType
 from app.vector.client import vector_store
 
 logger = logging.getLogger(__name__)
@@ -36,12 +36,10 @@ class MemeImageCreator:
 
     async def create(self, date: date) -> str:
         if image_manager.is_exist(
-            language_code=LanguageCode.KOREAN,
             date=date,
             image_type=ImageType.MEME,
         ):
             return image_manager.find_image_path_by(
-                language_code=LanguageCode.KOREAN,
                 date=date,
                 image_type=ImageType.MEME,
             )
@@ -54,7 +52,6 @@ class MemeImageCreator:
         meme_image = image_text_renderer.add_meme(image, meme_text)
         meme_image_path = image_manager.save_image(
             image_bytes=meme_image,
-            language_code=LanguageCode.KOREAN,
             date=date,
             image_type=ImageType.MEME,
         )
