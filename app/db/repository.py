@@ -6,8 +6,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.contents.enums import MemeStatus
 from app.contents.meme_analyzer import MemeAnalyzeResult
 from app.db.models import MemeRecord
-from app.exceptions import NoApprovedMemeError
-from app.schemas.contents import MemeCandidate, MemeContent
+from app.exceptions import MemeNotFoundError, NoApprovedMemeError
+from app.schemas.contents import MemeCandidate, MemeContent, MemeListItem
 
 
 class MemeRepository:
@@ -56,3 +56,38 @@ class MemeRepository:
             translation=record.translation,
             background=record.background,
         )
+
+    async def update_status(self, meme_id: int, status: MemeStatus) -> None:
+        record = await self._session.get(MemeRecord, meme_id)
+        if record is None:
+            raise MemeNotFoundError(meme_id)
+
+        record.status = status
+        await self._session.commit()
+
+    async def fetch_by_statuses(
+        self, statuses: list[MemeStatus], offset: int, limit: int
+    ) -> list[MemeListItem]:
+        result = await self._session.exec(
+            select(MemeRecord)
+            .where(col(MemeRecord.status).in_(statuses))
+            .order_by(col(MemeRecord.id).asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return [
+            MemeListItem(
+                id=record.id,  # type: ignore[arg-type]
+                image_url=record.img_url,
+                meme_text=record.meme_text,
+                source=record.source,
+                author=record.author,
+                expressions=record.expressions,
+                translation=record.translation,
+                background=record.background,
+                status=record.status,
+                used_at=record.used_at,
+                created_at=record.created_at,
+            )
+            for record in result.all()
+        ]

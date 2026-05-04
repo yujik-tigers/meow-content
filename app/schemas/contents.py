@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from datetime import date, datetime
+
+from app.contents.enums import MemeStatus
 
 
 @dataclass
@@ -41,3 +44,23 @@ class MemeContent:
     expressions: str
     translation: str
     background: None | str
+
+
+@dataclass(frozen=True)
+class UpdateMemeStatusRequest:
+    status: MemeStatus
+
+
+@dataclass(frozen=True)
+class MemeListItem:
+    id: int
+    image_url: str
+    meme_text: str
+    source: str
+    author: str
+    expressions: str
+    translation: str
+    background: str | None
+    status: MemeStatus
+    used_at: date | None
+    created_at: datetime
