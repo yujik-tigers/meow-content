@@ -61,16 +61,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             # 기존 컨테이너 중지 및 삭제
-            docker stop meow-content || true
-            docker rm meow-content || true
+            docker stop meow-content meow-streamlit || true
+            docker rm meow-content meow-streamlit || true
 
             # .env 파일 생성
             echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.tmp
-            
+
             # 최신 이미지 Pull
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
-            
-            # 새 컨테이너 실행
+
+            # FastAPI 컨테이너 실행
             docker run -d \
               --name meow-content \
               --network meow-network \
@@ -78,6 +78,16 @@ jobs:
               -v ~/meow-content/images:/code/app/images \
               --env-file .env.tmp \
               ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
+
+            # Streamlit 컨테이너 실행
+            docker run -d \
+              --name meow-streamlit \
+              --network meow-network \
+              -p 8501:8501 \
+              --env-file .env.tmp \
+              -e API_BASE_URL=http://meow-content:8000 \
+              ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest \
+              streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0
 
             rm -f .env.tmp
 

@@ -1,7 +1,9 @@
+import os
+
 import requests
 import streamlit as st
 
-DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 ALL_STATUSES = ["pending", "approved", "rejected", "used"]
 STATUS_COLORS = {
     "pending": "orange",
