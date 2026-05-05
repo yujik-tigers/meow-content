@@ -2,14 +2,14 @@ from datetime import date
 
 from google.genai import Client, types
 
-from app.clients.zenquotes_client import Quote, create_daily_quote
-from app.contents import (
+from app.client.zenquotes_client import Quote, create_daily_quote
+from app.content import (
     image_manager,
     image_text_renderer,
     quote_translator,
 )
-from app.contents.enums import ImageType
-from app.schemas.contents import QuoteImagePaths
+from app.content.enums import ImageType
+from app.schema.contents import QuoteImagePaths
 
 
 class QuoteImageCreator:

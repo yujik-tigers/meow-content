@@ -3,11 +3,11 @@ from datetime import date
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.contents.enums import MemeStatus
-from app.contents.meme_analyzer import MemeAnalyzeResult
+from app.content.enums import MemeStatus
+from app.content.meme_analyzer import MemeAnalyzeResult
 from app.db.models import MemeRecord
 from app.exceptions import MemeNotFoundError, NoApprovedMemeError
-from app.schemas.contents import MemeCandidate, MemeContent, MemeListItem
+from app.schema.contents import MemeCandidate, MemeContent, MemeListItem
 
 
 class MemeRepository:

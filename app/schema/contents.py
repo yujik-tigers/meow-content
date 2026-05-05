@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from app.contents.enums import MemeStatus
+from app.content.enums import MemeStatus
 
 
 @dataclass

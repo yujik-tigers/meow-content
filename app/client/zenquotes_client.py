@@ -1,6 +1,6 @@
 import httpx
 
-from app.schemas.contents import Quote
+from app.schema.contents import Quote
 
 
 async def create_daily_quote() -> Quote:

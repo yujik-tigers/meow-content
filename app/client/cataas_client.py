@@ -7,8 +7,8 @@ from datetime import date
 
 import httpx
 
-from app.contents import image_manager
-from app.contents.enums import ImageType
+from app.content import image_manager
+from app.content.enums import ImageType
 
 
 async def get_daily_cat_image(date: date) -> bytes:

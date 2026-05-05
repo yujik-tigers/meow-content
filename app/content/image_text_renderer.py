@@ -3,7 +3,7 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.clients.zenquotes_client import Quote
+from app.client.zenquotes_client import Quote
 from app.settings import app_config
 
 MAX_LINES = 2

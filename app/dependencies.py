@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.contents.quote_image_creator import QuoteImageCreator, quote_image_creator
+from app.content.quote_image_creator import QuoteImageCreator, quote_image_creator
 from app.db.engine import AsyncSessionLocal
 from app.db.repository import MemeRepository
 

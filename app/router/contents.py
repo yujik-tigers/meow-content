@@ -4,14 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from starlette import status
 
-from app.contents import meme_analyzer
-from app.contents.enums import MemeStatus
+from app.content import meme_analyzer
+from app.content.enums import MemeStatus
 from app.db.repository import MemeRepository
 from app.dependencies import (
     inject_meme_repository,
 )
-from app.schemas.common import ApiResponse
-from app.schemas.contents import (
+from app.schema.common import ApiResponse
+from app.schema.contents import (
     MemeCandidate,
     MemeContent,
     MemeListItem,

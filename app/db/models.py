@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
-from app.contents.enums import MemeStatus
+from app.content.enums import MemeStatus
 
 
 class MemeRecord(SQLModel, table=True):

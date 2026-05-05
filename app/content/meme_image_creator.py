@@ -11,9 +11,9 @@ from langchain_core.output_parsers import (
 from langchain_openai import ChatOpenAI
 from langchain_qdrant import QdrantVectorStore
 
-from app.clients import cataas_client
-from app.contents import image_manager, image_text_renderer
-from app.contents.enums import ImageType
+from app.client import cataas_client
+from app.content import image_manager, image_text_renderer
+from app.content.enums import ImageType
 
 logger = logging.getLogger(__name__)
 

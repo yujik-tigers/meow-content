@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.db.engine import create_tables
 from app.exceptions import MemeNotFoundError, NoApprovedMemeError
-from app.routers.contents import router as contents_router
+from app.router.contents import router as contents_router
 
 logging.basicConfig(level=logging.INFO)
 
