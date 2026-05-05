@@ -12,9 +12,8 @@ class MemeAnalyzeResult(BaseModel):
         description="The most useful English word or idiom for language learning extracted from the meme text"
     )
     translation: str = Field(description="Korean translation of the expression")
-    background: str | None = Field(
-        default=None,
-        description="Korean explanation of the cultural background, origin, or usage context — only when the expression is slang, internet slang, abbreviation, or culturally specific term that requires extra context to understand",
+    background: str = Field(
+        description="Korean explanation of what this meme means and why it's funny",
     )
 
 
@@ -29,7 +28,7 @@ Guidelines:
 - Choose one expression (word, phrase, or idiom) that is most useful for English learning
 - Prefer idiomatic expressions, slang, or culturally significant phrases over common words
 - Provide an accurate and natural Korean translation
-- If the expression is slang, internet slang, abbreviation, or a culturally specific term, add a Korean background explanation covering its origin, how it's used, or why it has that meaning. Otherwise leave it null.
+- Always provide a brief Korean background explanation describing what the meme means and why it's funny
 """)
 
 _chain = _llm.with_structured_output(MemeAnalyzeResult)

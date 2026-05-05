@@ -32,7 +32,7 @@ class MemeAnalysisResult:
     meme_text: str
     expressions: str
     translation: str
-    background: str | None
+    background: str
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,16 @@ class MemeContent:
     author: str
     expressions: str
     translation: str
-    background: None | str
+    background: str
+
+
+@dataclass(frozen=True)
+class TriggerScrapingRequest:
+    count: int
+
+    def __post_init__(self) -> None:
+        if not (1 <= self.count <= 10):
+            raise ValueError("count must be between 1 and 10")
 
 
 @dataclass(frozen=True)
@@ -60,7 +69,7 @@ class MemeListItem:
     author: str
     expressions: str
     translation: str
-    background: str | None
+    background: str
     status: MemeStatus
     used_at: date | None
     created_at: datetime

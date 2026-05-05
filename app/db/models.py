@@ -17,7 +17,7 @@ class MemeRecord(SQLModel, table=True):
     source: str = Field(max_length=200)
     expressions: str = Field(max_length=200)
     translation: str = Field(max_length=200)
-    background: str | None = None
+    background: str = Field(sa_column=Column(Text))
     status: MemeStatus = Field(default=MemeStatus.PENDING, max_length=20)
     used_at: date | None = Field(default=None)
     created_at: datetime = Field(

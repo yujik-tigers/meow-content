@@ -10,11 +10,13 @@ from app.db.repository import MemeRepository
 from app.dependencies import (
     inject_meme_repository,
 )
+from app.scheduler.scraping_scheduler import scraping_scheduler
 from app.schema.common import ApiResponse
 from app.schema.contents import (
     MemeCandidate,
     MemeContent,
     MemeListItem,
+    TriggerScrapingRequest,
     UpdateMemeStatusRequest,
 )
 
@@ -49,6 +51,11 @@ async def update_meme_status(
     repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
 ) -> None:
     await repository.update_status(meme_id, request.status)
+
+
+@router.post("/memes/scrape", status_code=status.HTTP_204_NO_CONTENT)
+async def trigger_scraping(request: TriggerScrapingRequest) -> None:
+    await scraping_scheduler._scrape_and_analyze(request.count)
 
 
 @router.post("/memes/analyze", status_code=status.HTTP_201_CREATED)

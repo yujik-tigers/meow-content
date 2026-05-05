@@ -1,4 +1,7 @@
+import functools
+from collections.abc import Callable
 from datetime import date
+from typing import Any
 
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -10,10 +13,23 @@ from app.exceptions import MemeNotFoundError, NoApprovedMemeError
 from app.schema.contents import MemeCandidate, MemeContent, MemeListItem
 
 
+def transactional(func: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(func)
+    async def wrapper(self: "MemeRepository", *args: Any, **kwargs: Any) -> Any:
+        try:
+            return await func(self, *args, **kwargs)
+        except Exception:
+            await self._session.rollback()
+            raise
+
+    return wrapper
+
+
 class MemeRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    @transactional
     async def save(
         self, meme_candidate: MemeCandidate, result: MemeAnalyzeResult
     ) -> int:
@@ -33,6 +49,7 @@ class MemeRepository:
         assert record.id is not None
         return record.id
 
+    @transactional
     async def fetch_approved_and_mark_used(self, used_at: date) -> MemeContent:
         result = await self._session.exec(
             select(MemeRecord)
@@ -57,6 +74,7 @@ class MemeRepository:
             background=record.background,
         )
 
+    @transactional
     async def update_status(self, meme_id: int, status: MemeStatus) -> None:
         record = await self._session.get(MemeRecord, meme_id)
         if record is None:

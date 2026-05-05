@@ -40,6 +40,15 @@ def update_status(base_url: str, meme_id: int, new_status: str) -> None:
     resp.raise_for_status()
 
 
+def trigger_scraping(base_url: str, count: int) -> None:
+    resp = requests.post(
+        f"{base_url}/api/v1/contents/memes/scrape",
+        json={"count": count},
+        timeout=300,
+    )
+    resp.raise_for_status()
+
+
 def render_sidebar() -> None:
     with st.sidebar:
         st.title("Setting")
@@ -49,6 +58,16 @@ def render_sidebar() -> None:
         if new_url != st.session_state.base_url:
             st.session_state.base_url = new_url
             st.session_state.page_index = 0
+
+        st.divider()
+        scrape_count = st.number_input("가져올 개수", min_value=1, max_value=10, value=3)
+        if st.button("Reddit 스크래핑 실행", use_container_width=True, type="primary"):
+            with st.spinner("스크래핑 중..."):
+                try:
+                    trigger_scraping(str(st.session_state.base_url), int(scrape_count))
+                    st.success("완료!")
+                except Exception as e:
+                    st.error(f"실패: {e}")
 
         st.divider()
         st.subheader("Filter")
