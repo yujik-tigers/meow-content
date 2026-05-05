@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 from app.db.engine import create_tables
 from app.exceptions import MemeNotFoundError, NoApprovedMemeError
 from app.router.contents import router as contents_router
-from app.scheduler.scraping_scheduler import scraping_scheduler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -15,9 +14,7 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
-    scraping_scheduler.start()
     yield
-    scraping_scheduler.stop()
 
 
 app = FastAPI(lifespan=lifespan)
