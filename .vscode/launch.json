@@ -1,22 +1,52 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "name": "FastAPI: Uvicorn",
-        "type": "python",
-        "request": "launch",
-        "module": "uvicorn",
-        "args": [
-          "app.main:app",
-          "--reload",
-          "--port", "8000"
-        ],
-        "jinja": true,
-        "env": {
-          "PYTHONPATH": "${workspaceFolder}"
-        },
-        "console": "integratedTerminal",
-        "justMyCode": false
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI: Uvicorn",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--port", "8000"],
+      "jinja": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
       },
-    ]
-  }
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Streamlit: 밈 검수",
+      "type": "python",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "${workspaceFolder}/view/meme_inspection.py",
+        "--server.port",
+        "8501"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Script: Load Korean Meme",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/load_korean_meme_script.py",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ],
+  "compounds": [
+    {
+      "name": "FastAPI + Streamlit",
+      "configurations": ["FastAPI: Uvicorn", "Streamlit: 밈 검수"]
+    }
+  ]
+}
