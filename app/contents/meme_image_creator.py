@@ -9,11 +9,11 @@ from langchain_core.output_parsers import (
     StrOutputParser,
 )
 from langchain_openai import ChatOpenAI
+from langchain_qdrant import QdrantVectorStore
 
 from app.clients import cataas_client
 from app.contents import image_manager, image_text_renderer
 from app.contents.enums import ImageType
-from app.vector.client import vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,11 @@ class MemeImageCreator:
         "app/images/meme_example6.png",
     ]
 
-    def __init__(self):
+    def __init__(self, vector_store: QdrantVectorStore):
         self._llm = ChatOpenAI(
             model="gpt-5.2", verbosity="medium", reasoning_effort="medium"
         )
+        self._vector_store = vector_store
 
     async def create(self, date: date) -> str:
         if image_manager.is_exist(
@@ -112,7 +113,7 @@ class MemeImageCreator:
         self, keywords: list[str], threshold: float
     ) -> list[Document]:
         seen: dict[str, Document] = {}
-        for doc, score in await vector_store.asimilarity_search_with_score(
+        for doc, score in await self._vector_store.asimilarity_search_with_score(
             query=", ".join(keywords), k=3, score_threshold=threshold
         ):
             doc_id = doc.metadata["id"]
@@ -162,6 +163,3 @@ class MemeImageCreator:
                 ),
             ]
         )
-
-
-meme_image_creator = MemeImageCreator()

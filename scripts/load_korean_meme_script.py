@@ -9,7 +9,7 @@ from datetime import datetime
 from datasets import load_dataset
 from langchain_core.documents import Document
 
-from app.vector.client import vector_store
+from app.vector.client import create_vector_store
 
 _DATASET_NAME = "huggingface-KREW/KoCulture-Descriptions"
 
@@ -24,6 +24,7 @@ def _parse_date(date_str: str) -> int:
 
 def main() -> None:
     dataset = load_dataset(_DATASET_NAME, split="train")
+    vector_store = create_vector_store()
 
     print("Columns:", dataset.column_names)
     print("Sample:", dataset[0])

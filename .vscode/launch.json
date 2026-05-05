@@ -19,6 +19,22 @@
         "justMyCode": false
       },
       {
+        "name": "Streamlit: 밈 검수",
+        "type": "python",
+        "request": "launch",
+        "module": "streamlit",
+        "args": [
+          "run",
+          "${workspaceFolder}/views/meme_inspection.py",
+          "--server.port", "8501"
+        ],
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        },
+        "console": "integratedTerminal",
+        "justMyCode": false
+      },
+      {
         "name": "Script: Load Korean Meme",
         "type": "python",
         "request": "launch",
@@ -29,5 +45,11 @@
         "console": "integratedTerminal",
         "justMyCode": false
       },
+    ],
+    "compounds": [
+      {
+        "name": "FastAPI + Streamlit",
+        "configurations": ["FastAPI: Uvicorn", "Streamlit: 밈 검수"]
+      }
     ]
   }
