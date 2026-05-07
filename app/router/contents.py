@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from starlette import status
 
-from app.client.reddit_client import reddit_client
+# from app.client.reddit_client import reddit_client
 from app.content import meme_analyzer
 from app.content.enums import MemeStatus
 from app.db.repository import MemeRepository
@@ -17,7 +17,6 @@ from app.schema.contents import (
     MemeCandidate,
     MemeContent,
     MemeListItem,
-    TriggerScrapingRequest,
     UpdateMemeStatusRequest,
 )
 
@@ -42,7 +41,7 @@ async def list_memes(
 async def fetch_daily_meme(
     date: date, repository: Annotated[MemeRepository, Depends(inject_meme_repository)]
 ) -> ApiResponse[MemeContent]:
-    meme_content = await repository.fetch_approved_and_mark_used(date)
+    meme_content = await repository.get_approved_meme_by(date)
     return ApiResponse(status.HTTP_200_OK, "OK", meme_content)
 
 
@@ -55,18 +54,18 @@ async def update_meme_status(
     await repository.update_status(meme_id, request.status)
 
 
-@router.post("/memes/scrape", status_code=status.HTTP_204_NO_CONTENT)
-async def trigger_scraping(
-    request: TriggerScrapingRequest,
-    repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
-) -> None:
-    candidates = await reddit_client.fetch_cat_memes(request.count)
-    for candidate in candidates:
-        try:
-            result = await meme_analyzer.analyze_meme(candidate.image_url)
-            await repository.save(candidate, result)
-        except Exception as e:
-            logger.error(f"Failed to process {candidate.image_url}: {e}")
+# @router.post("/memes/scrape", status_code=status.HTTP_204_NO_CONTENT)
+# async def trigger_scraping(
+#     request: TriggerScrapingRequest,
+#     repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
+# ) -> None:
+#     candidates = await reddit_client.fetch_cat_memes(request.count)
+#     for candidate in candidates:
+#         try:
+#             result = await meme_analyzer.analyze_meme(candidate.image_url)
+#             await repository.save(candidate, result)
+#         except Exception as e:
+#             logger.error(f"Failed to process {candidate.image_url}: {e}")
 
 
 @router.post("/memes/analyze", status_code=status.HTTP_201_CREATED)
