@@ -4,7 +4,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.settings import app_config
 
-engine = create_async_engine(app_config.MYSQL_URL)
+engine = create_async_engine(
+    app_config.MYSQL_URL,
+    pool_pre_ping=True,
+)
 
 AsyncSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False

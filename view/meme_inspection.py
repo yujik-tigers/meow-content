@@ -207,7 +207,7 @@ def main() -> None:
     init_state()
     render_sidebar()
 
-    st.title("Meom Meme Dashboard")
+    st.title("Meow Meme Dashboard")
 
     if st.session_state.last_error:
         st.error(f"API 오류: {st.session_state.last_error}")
