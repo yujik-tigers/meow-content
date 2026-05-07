@@ -13,7 +13,7 @@ class MemeAnalyzeResult(BaseModel):
     )
     translation: str = Field(description="Korean translation of the expression")
     background: str = Field(
-        description="Korean explanation of what this meme means and why it's funny",
+        description="Korean explanation of what this meme means",
     )
 
 
@@ -28,7 +28,7 @@ Guidelines:
 - Choose one expression (word, phrase, or idiom) that is most useful for English learning
 - Prefer idiomatic expressions, slang, or culturally significant phrases over common words
 - Provide an accurate and natural Korean translation
-- Always provide a brief Korean background explanation describing what the meme means and why it's funny
+- Always provide a brief Korean background explanation describing what the meme means
 """)
 
 _chain = _llm.with_structured_output(MemeAnalyzeResult)

@@ -50,19 +50,17 @@ class MemeRepository:
         return record.id
 
     @transactional
-    async def fetch_approved_and_mark_used(self, used_at: date) -> MemeContent:
-        result = await self._session.exec(
+    async def get_approved_meme_by(self, used_at: date) -> MemeContent:
+        used_result = await self._session.exec(
             select(MemeRecord)
-            .where(col(MemeRecord.status) == MemeStatus.APPROVED)
+            .where(col(MemeRecord.status) == MemeStatus.USED)
+            .where(col(MemeRecord.used_at) == used_at)
             .limit(1)
         )
-        record = result.first()
-        if record is None:
-            raise NoApprovedMemeError()
+        record = used_result.first()
 
-        record.status = MemeStatus.USED
-        record.used_at = used_at
-        await self._session.commit()
+        if record is None:
+            record = await self.get_approved_meme_and_mark_used(used_at)
 
         return MemeContent(
             image_url=record.img_url,
@@ -109,3 +107,19 @@ class MemeRepository:
             )
             for record in result.all()
         ]
+
+    async def get_approved_meme_and_mark_used(self, used_at: date) -> MemeRecord:
+        approved_result = await self._session.exec(
+            select(MemeRecord)
+            .where(col(MemeRecord.status) == MemeStatus.APPROVED)
+            .limit(1)
+        )
+        record = approved_result.first()
+        if record is None:
+            raise NoApprovedMemeError()
+
+        record.status = MemeStatus.USED
+        record.used_at = used_at
+        await self._session.commit()
+
+        return record
