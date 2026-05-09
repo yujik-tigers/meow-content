@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 app/images/*
 !app/images/meme_example*.jpeg
+/script/scrape_reddit_memes.py

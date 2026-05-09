@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 
 class MemeAnalyzeResult(BaseModel):
     meme_text: str = Field(description="The exact text written on the meme image")
+    meme_text_translation: str = Field(
+        description="Korean translation of the text written on the meme image"
+    )
     expressions: str = Field(
         description="The most useful English word or idiom for language learning extracted from the meme text"
     )

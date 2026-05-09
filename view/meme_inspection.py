@@ -33,6 +33,15 @@ def fetch_memes(
     return resp.json().get("content", [])
 
 
+def update_background(base_url: str, meme_id: int, background: str) -> None:
+    resp = requests.patch(
+        f"{base_url}/api/v1/contents/memes/{meme_id}/background",
+        json={"background": background},
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
 def update_status(base_url: str, meme_id: int, new_status: str) -> None:
     resp = requests.patch(
         f"{base_url}/api/v1/contents/memes/{meme_id}/status",
@@ -173,6 +182,7 @@ def render_action_buttons(meme: dict) -> None:
 
 
 def render_card(meme: dict) -> None:
+    meme_id = meme["id"]
     with st.container(border=True):
         col_img, col_meta = st.columns([1, 3])
 
@@ -188,10 +198,25 @@ def render_card(meme: dict) -> None:
             color = STATUS_COLORS.get(status, "gray")
             st.markdown(f"**#{meme['id']}** &nbsp; :{color}[{status.upper()}]")
             st.markdown(f"**밈 텍스트:** {meme['meme_text']}")
+            st.markdown(f"**밈 텍스트 번역:** {meme['meme_text_translation']}")
             st.markdown(f"**핵심 표현:** `{meme['expressions']}`")
             st.markdown(f"**한국어:** {meme['translation']}")
-            if meme.get("background"):
-                st.markdown(f"**배경:** {meme['background']}")
+            st.markdown("**배경:**")
+            current_bg = st.text_area(
+                "배경",
+                value=meme.get("background", ""),
+                key=f"bg_{meme_id}",
+                height=80,
+                label_visibility="collapsed",
+            ) or ""
+            if current_bg != meme.get("background", ""):
+                if st.button("저장", key=f"save_bg_{meme_id}", type="primary"):
+                    try:
+                        update_background(st.session_state.base_url, meme_id, current_bg)
+                        st.success("배경이 저장되었습니다.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"저장 실패: {e}")
             created = meme.get("created_at", "")[:10]
             st.caption(
                 f"출처: {meme['source']}  |  작성자: {meme['author']}  |  생성일: {created}"

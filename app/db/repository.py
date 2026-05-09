@@ -10,14 +10,16 @@ from app.content.enums import MemeStatus
 from app.content.meme_analyzer import MemeAnalyzeResult
 from app.db.models import MemeRecord
 from app.exceptions import MemeNotFoundError, NoApprovedMemeError
-from app.schema.contents import MemeCandidate, MemeContent, MemeListItem
+from app.schema.contents import MemeCandidate, MemeContent
 
 
 def transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     async def wrapper(self: "MemeRepository", *args: Any, **kwargs: Any) -> Any:
         try:
-            return await func(self, *args, **kwargs)
+            result = await func(self, *args, **kwargs)
+            await self._session.commit()
+            return result
         except Exception:
             await self._session.rollback()
             raise
@@ -36,6 +38,7 @@ class MemeRepository:
         record = MemeRecord(
             img_url=meme_candidate.image_url,
             meme_text=result.meme_text,
+            meme_text_translation=result.meme_text_translation,
             author=meme_candidate.author,
             source=meme_candidate.source,
             expressions=result.expressions,
@@ -43,8 +46,7 @@ class MemeRepository:
             background=result.background,
         )
         self._session.add(record)
-        await self._session.commit()
-        await self._session.refresh(record)
+        await self._session.flush()
 
         assert record.id is not None
         return record.id
@@ -65,12 +67,22 @@ class MemeRepository:
         return MemeContent(
             image_url=record.img_url,
             meme_text=record.meme_text,
+            meme_text_translation=record.meme_text_translation,
             source=record.source,
             author=record.author,
             expressions=record.expressions,
             translation=record.translation,
             background=record.background,
+            status=record.status,
+            used_at=record.used_at,
         )
+
+    @transactional
+    async def update_background(self, meme_id: int, background: str) -> None:
+        record = await self._session.get(MemeRecord, meme_id)
+        if record is None:
+            raise MemeNotFoundError(meme_id)
+        record.background = background
 
     @transactional
     async def update_status(self, meme_id: int, status: MemeStatus) -> None:
@@ -79,11 +91,10 @@ class MemeRepository:
             raise MemeNotFoundError(meme_id)
 
         record.status = status
-        await self._session.commit()
 
     async def fetch_by_statuses(
         self, statuses: list[MemeStatus], offset: int, limit: int
-    ) -> list[MemeListItem]:
+    ) -> list[MemeContent]:
         result = await self._session.exec(
             select(MemeRecord)
             .where(col(MemeRecord.status).in_(statuses))
@@ -92,10 +103,11 @@ class MemeRepository:
             .limit(limit)
         )
         return [
-            MemeListItem(
+            MemeContent(
                 id=record.id,  # type: ignore[arg-type]
                 image_url=record.img_url,
                 meme_text=record.meme_text,
+                meme_text_translation=record.meme_text_translation,
                 source=record.source,
                 author=record.author,
                 expressions=record.expressions,
@@ -103,7 +115,6 @@ class MemeRepository:
                 background=record.background,
                 status=record.status,
                 used_at=record.used_at,
-                created_at=record.created_at,
             )
             for record in result.all()
         ]
@@ -120,6 +131,5 @@ class MemeRepository:
 
         record.status = MemeStatus.USED
         record.used_at = used_at
-        await self._session.commit()
 
         return record

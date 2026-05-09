@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 
 from app.content.enums import MemeStatus
 
@@ -39,10 +39,19 @@ class MemeAnalysisResult:
 class MemeContent:
     image_url: str
     meme_text: str
+    meme_text_translation: str
     source: str
     author: str
     expressions: str
     translation: str
+    background: str
+    status: MemeStatus
+    used_at: date | None
+    id: int | None = None
+
+
+@dataclass(frozen=True)
+class UpdateMemeBackgroundRequest:
     background: str
 
 
@@ -58,18 +67,3 @@ class TriggerScrapingRequest:
 @dataclass(frozen=True)
 class UpdateMemeStatusRequest:
     status: MemeStatus
-
-
-@dataclass(frozen=True)
-class MemeListItem:
-    id: int
-    image_url: str
-    meme_text: str
-    source: str
-    author: str
-    expressions: str
-    translation: str
-    background: str
-    status: MemeStatus
-    used_at: date | None
-    created_at: datetime

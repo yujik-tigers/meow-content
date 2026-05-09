@@ -13,6 +13,7 @@ class MemeRecord(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     img_url: str = Field(sa_column=Column(Text))
     meme_text: str
+    meme_text_translation: str
     author: str = Field(max_length=200)
     source: str = Field(max_length=200)
     expressions: str = Field(max_length=200)
