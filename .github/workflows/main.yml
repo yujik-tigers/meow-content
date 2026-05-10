@@ -77,6 +77,7 @@ jobs:
               -p 8000:8000 \
               -v ~/meow-content/images:/code/app/images \
               --env-file .env.tmp \
+              -e TZ=Asia/Seoul \
               ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
 
             # Streamlit 컨테이너 실행
@@ -85,6 +86,7 @@ jobs:
               --network meow-network \
               -p 8501:8501 \
               --env-file .env.tmp \
+              -e TZ=Asia/Seoul \
               -e API_BASE_URL=http://meow-content:8000 \
               ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest \
               streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0

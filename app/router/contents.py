@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import date
 from typing import Annotated
@@ -26,6 +27,7 @@ from app.schema.contents import (
 
 router = APIRouter(prefix="/contents", tags=["contents"])
 logger = logging.getLogger(__name__)
+_daily_meme_lock = asyncio.Lock()
 
 
 @router.get("/memes/search")
@@ -41,21 +43,25 @@ async def list_memes(
     return ApiResponse(status.HTTP_200_OK, "OK", items)
 
 
-# 동시성 문제 있음
 @router.get("/memes")
 async def fetch_daily_meme(
     date: date, repository: Annotated[MemeRepository, Depends(inject_meme_repository)]
-) -> ApiResponse[MemeContent | None]:
+) -> ApiResponse[MemeContent]:
     meme_content = await repository.get_by_used_at(date)
-    if meme_content is None:
-        approved_meme = next(
-            iter(await repository.fetch_by_statuses([MemeStatus.APPROVED], 0, 1)), None
-        )
-        if not approved_meme:
-            raise NoApprovedMemeError()
+    if meme_content is not None:
+        return ApiResponse(status.HTTP_200_OK, "OK", meme_content)
 
-        assert approved_meme.id is not None
-        meme_content = await repository.mark_as_used(approved_meme.id, date)
+    async with _daily_meme_lock:
+        meme_content = await repository.get_by_used_at(date)
+        if meme_content is None:
+            approved_meme = next(
+                iter(await repository.fetch_by_statuses([MemeStatus.APPROVED], 0, 1)),
+                None,
+            )
+            if not approved_meme:
+                raise NoApprovedMemeError()
+            assert approved_meme.id is not None
+            meme_content = await repository.mark_as_used(approved_meme.id, date)
     return ApiResponse(status.HTTP_200_OK, "OK", meme_content)
 
 
