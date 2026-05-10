@@ -6,8 +6,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.client.reddit_client import RedditClient, reddit_client
 from app.content.quote_image_creator import QuoteImageCreator, quote_image_creator
-from app.db.engine import AsyncSessionLocal
-from app.db.repository import MemeRepository
+from app.repository import MemeRepository
+from app.repository.mysql.engine import AsyncSessionLocal
+from app.repository.mysql.repository import MySQLMemeRepository
 
 
 async def inject_quote_image_creator() -> QuoteImageCreator:
@@ -22,7 +23,7 @@ async def inject_db_session() -> AsyncGenerator[AsyncSession, None]:
 async def inject_meme_repository(
     session: Annotated[AsyncSession, Depends(inject_db_session)],
 ) -> MemeRepository:
-    return MemeRepository(session)
+    return MySQLMemeRepository(session)
 
 
 async def inject_reddit_client() -> RedditClient:

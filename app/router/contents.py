@@ -8,15 +8,17 @@ from starlette import status
 from app.client.reddit_client import RedditClient
 from app.content import meme_analyzer
 from app.content.enums import MemeStatus
-from app.db.repository import MemeRepository
 from app.dependencies import (
     inject_meme_repository,
     inject_reddit_client,
 )
+from app.exceptions import NoApprovedMemeError
+from app.repository import MemeRepository
 from app.schema.common import ApiResponse
 from app.schema.contents import (
     MemeCandidate,
     MemeContent,
+    MemeSaveData,
     TriggerScrapingRequest,
     UpdateMemeBackgroundRequest,
     UpdateMemeStatusRequest,
@@ -39,11 +41,21 @@ async def list_memes(
     return ApiResponse(status.HTTP_200_OK, "OK", items)
 
 
+# 동시성 문제 있음
 @router.get("/memes")
 async def fetch_daily_meme(
     date: date, repository: Annotated[MemeRepository, Depends(inject_meme_repository)]
-) -> ApiResponse[MemeContent]:
-    meme_content = await repository.get_approved_meme_by(date)
+) -> ApiResponse[MemeContent | None]:
+    meme_content = await repository.get_by_used_at(date)
+    if meme_content is None:
+        approved_meme = next(
+            iter(await repository.fetch_by_statuses([MemeStatus.APPROVED], 0, 1)), None
+        )
+        if not approved_meme:
+            raise NoApprovedMemeError()
+
+        assert approved_meme.id is not None
+        meme_content = await repository.mark_as_used(approved_meme.id, date)
     return ApiResponse(status.HTTP_200_OK, "OK", meme_content)
 
 
@@ -75,7 +87,18 @@ async def trigger_scraping(
     for candidate in candidates:
         try:
             result = await meme_analyzer.analyze_meme(candidate.image_url)
-            await repository.save(candidate, result)
+            await repository.save(
+                MemeSaveData(
+                    img_url=candidate.image_url,
+                    meme_text=result.meme_text,
+                    meme_text_translation=result.meme_text_translation,
+                    author=candidate.author,
+                    source=candidate.source,
+                    expressions=result.expressions,
+                    translation=result.translation,
+                    background=result.background,
+                )
+            )
         except Exception as e:
             logger.error(f"Failed to process {candidate.image_url}: {e}")
 
@@ -86,7 +109,18 @@ async def analyze_meme(
     repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
 ) -> ApiResponse[int]:
     analysis_result = await meme_analyzer.analyze_meme(meme_candidate.image_url)
-    save_id = await repository.save(meme_candidate, analysis_result)
+    save_id = await repository.save(
+        MemeSaveData(
+            img_url=meme_candidate.image_url,
+            meme_text=analysis_result.meme_text,
+            meme_text_translation=analysis_result.meme_text_translation,
+            author=meme_candidate.author,
+            source=meme_candidate.source,
+            expressions=analysis_result.expressions,
+            translation=analysis_result.translation,
+            background=analysis_result.background,
+        )
+    )
 
     return ApiResponse(
         status_code=status.HTTP_201_CREATED, status_message="CREATED", content=save_id

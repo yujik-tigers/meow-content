@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.db.engine import create_tables
+from app.repository.mysql.engine import create_tables
 from app.exceptions import MemeNotFoundError, NoApprovedMemeError
 from app.router.contents import router as contents_router
 

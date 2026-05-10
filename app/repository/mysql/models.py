@@ -5,6 +5,7 @@ from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
 from app.content.enums import MemeStatus
+from app.schema.contents import MemeContent
 
 
 class MemeRecord(SQLModel, table=True):
@@ -24,3 +25,18 @@ class MemeRecord(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(ZoneInfo("Asia/Seoul"))
     )
+
+    def to_content(self) -> MemeContent:
+        return MemeContent(
+            id=self.id,  # type: ignore[arg-type]
+            image_url=self.img_url,
+            meme_text=self.meme_text,
+            meme_text_translation=self.meme_text_translation,
+            source=self.source,
+            author=self.author,
+            expressions=self.expressions,
+            translation=self.translation,
+            background=self.background,
+            status=self.status,
+            used_at=self.used_at,
+        )

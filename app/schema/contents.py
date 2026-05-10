@@ -25,6 +25,18 @@ class MemeCandidate:
 
 
 @dataclass(frozen=True)
+class MemeSaveData:
+    img_url: str
+    meme_text: str
+    meme_text_translation: str
+    author: str
+    source: str
+    expressions: str
+    translation: str
+    background: str
+
+
+@dataclass(frozen=True)
 class MemeAnalysisResult:
     image_url: str
     source: str
