@@ -1,9 +1,30 @@
+import hashlib
+import logging
 import os
+import threading
+import time
 
 import requests
 import streamlit as st
 
+_logger = logging.getLogger(__name__)
+
 DEFAULT_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+_ADMIN_PW_HASH = hashlib.sha256(os.environ["ADMIN_PASSWORD"].encode()).hexdigest()
+
+MAX_FAILURES = 5
+LOCKOUT_SECONDS = 60
+
+
+@st.cache_resource
+def _auth_state() -> tuple[threading.Lock, dict[str, list[float]]]:
+    return threading.Lock(), {}
+
+
+def _client_ip() -> str:
+    headers = st.context.headers
+    forwarded = headers.get("X-Forwarded-For") or headers.get("X-Real-Ip", "unknown")
+    return forwarded.split(",")[0].strip()
 ALL_STATUSES = ["pending", "approved", "rejected", "used"]
 STATUS_COLORS = {
     "pending": "orange",
@@ -11,6 +32,63 @@ STATUS_COLORS = {
     "rejected": "red",
     "used": "blue",
 }
+
+
+def _is_locked_out(ip: str) -> float:
+    lock, failures = _auth_state()
+    now = time.monotonic()
+    with lock:
+        cutoff = now - LOCKOUT_SECONDS
+        timestamps = [t for t in failures.get(ip, []) if t > cutoff]
+        failures[ip] = timestamps
+        if len(timestamps) >= MAX_FAILURES:
+            return timestamps[0] + LOCKOUT_SECONDS - now
+    return 0.0
+
+
+def _record_failure(ip: str) -> None:
+    lock, failures = _auth_state()
+    with lock:
+        timestamps = failures.setdefault(ip, [])
+        timestamps.append(time.monotonic())
+        if len(timestamps) == MAX_FAILURES:
+            _logger.warning("Auth locked out: ip=%s failures=%d", ip, len(timestamps))
+
+
+def _clear_failures(ip: str) -> None:
+    lock, failures = _auth_state()
+    with lock:
+        failures.pop(ip, None)
+
+
+def require_auth() -> bool:
+    st.session_state.setdefault("authenticated", False)
+    if st.session_state.authenticated:
+        return True
+    st.title("Meow Meme Dashboard")
+    st.subheader("로그인")
+
+    ip = _client_ip()
+    remaining = _is_locked_out(ip)
+    if remaining > 0:
+        st.error(f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요.")
+        return False
+
+    pw = st.text_input("비밀번호", type="password")
+    if st.button("로그인"):
+        if hashlib.sha256(pw.encode()).hexdigest() == _ADMIN_PW_HASH:
+            _clear_failures(ip)
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            _record_failure(ip)
+            remaining = _is_locked_out(ip)
+            if remaining > 0:
+                st.error(f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요.")
+            else:
+                left = MAX_FAILURES - len(_auth_state()[1].get(ip, []))
+                st.error(f"비밀번호가 올바르지 않습니다. ({left}회 남음)")
+    return False
 
 
 def init_state() -> None:
@@ -71,7 +149,9 @@ def render_sidebar() -> None:
             st.session_state.page_index = 0
 
         st.divider()
-        scrape_count = st.number_input("가져올 개수", min_value=1, max_value=10, value=3)
+        scrape_count = st.number_input(
+            "가져올 개수", min_value=1, max_value=10, value=3
+        )
         if st.button("Reddit 스크래핑 실행", use_container_width=True, type="primary"):
             with st.spinner("스크래핑 중..."):
                 try:
@@ -202,17 +282,22 @@ def render_card(meme: dict) -> None:
             st.markdown(f"**핵심 표현:** `{meme['expressions']}`")
             st.markdown(f"**한국어:** {meme['translation']}")
             st.markdown("**배경:**")
-            current_bg = st.text_area(
-                "배경",
-                value=meme.get("background", ""),
-                key=f"bg_{meme_id}",
-                height=80,
-                label_visibility="collapsed",
-            ) or ""
+            current_bg = (
+                st.text_area(
+                    "배경",
+                    value=meme.get("background", ""),
+                    key=f"bg_{meme_id}",
+                    height=80,
+                    label_visibility="collapsed",
+                )
+                or ""
+            )
             if current_bg != meme.get("background", ""):
                 if st.button("저장", key=f"save_bg_{meme_id}", type="primary"):
                     try:
-                        update_background(st.session_state.base_url, meme_id, current_bg)
+                        update_background(
+                            st.session_state.base_url, meme_id, current_bg
+                        )
                         st.success("배경이 저장되었습니다.")
                         st.rerun()
                     except Exception as e:
@@ -229,6 +314,8 @@ def render_card(meme: dict) -> None:
 
 def main() -> None:
     st.set_page_config(page_title="Meow Meme Dashboard", layout="wide")
+    if not require_auth():
+        return
     init_state()
     render_sidebar()
 
