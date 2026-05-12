@@ -89,7 +89,7 @@ jobs:
               -e TZ=Asia/Seoul \
               -e API_BASE_URL=http://meow-content:8000 \
               ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest \
-              streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0
+              streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0 --server.baseUrlPath /admin
 
             rm -f .env.tmp
 
