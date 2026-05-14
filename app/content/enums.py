@@ -2,7 +2,8 @@ from enum import StrEnum
 
 
 class MemeStatus(StrEnum):
-    PENDING = "pending"
+    RAW = "raw"
+    ANALYZED = "analyzed"
     APPROVED = "approved"
     REJECTED = "rejected"
     USED = "used"

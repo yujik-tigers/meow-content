@@ -6,12 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from starlette import status
 
-from app.client.reddit_client import RedditClient
 from app.content import meme_analyzer
 from app.content.enums import MemeStatus
 from app.dependencies import (
     inject_meme_repository,
-    inject_reddit_client,
 )
 from app.exceptions import NoApprovedMemeError
 from app.repository import MemeRepository
@@ -20,7 +18,6 @@ from app.schema.contents import (
     MemeCandidate,
     MemeContent,
     MemeSaveData,
-    TriggerScrapingRequest,
     UpdateMemeBackgroundRequest,
     UpdateMemeStatusRequest,
 )
@@ -81,32 +78,6 @@ async def update_meme_status(
     repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
 ) -> None:
     await repository.update_status(meme_id, request.status)
-
-
-@router.post("/memes/scrape", status_code=status.HTTP_204_NO_CONTENT)
-async def trigger_scraping(
-    request: TriggerScrapingRequest,
-    reddit_client: Annotated[RedditClient, Depends(inject_reddit_client)],
-    repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
-) -> None:
-    candidates = await reddit_client.fetch_cat_memes(request.count)
-    for candidate in candidates:
-        try:
-            result = await meme_analyzer.analyze_meme(candidate.image_url)
-            await repository.save(
-                MemeSaveData(
-                    img_url=candidate.image_url,
-                    meme_text=result.meme_text,
-                    meme_text_translation=result.meme_text_translation,
-                    author=candidate.author,
-                    source=candidate.source,
-                    expressions=result.expressions,
-                    translation=result.translation,
-                    background=result.background,
-                )
-            )
-        except Exception as e:
-            logger.error(f"Failed to process {candidate.image_url}: {e}")
 
 
 @router.post("/memes/analyze", status_code=status.HTTP_201_CREATED)

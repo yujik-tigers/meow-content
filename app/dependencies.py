@@ -4,7 +4,6 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.client.reddit_client import RedditClient, reddit_client
 from app.content.quote_image_creator import QuoteImageCreator, quote_image_creator
 from app.repository import MemeRepository
 from app.repository.mysql.engine import AsyncSessionLocal
@@ -24,7 +23,3 @@ async def inject_meme_repository(
     session: Annotated[AsyncSession, Depends(inject_db_session)],
 ) -> MemeRepository:
     return MySQLMemeRepository(session)
-
-
-async def inject_reddit_client() -> RedditClient:
-    return reddit_client

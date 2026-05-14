@@ -20,10 +20,6 @@ class Settings(BaseSettings):
 
     MYSQL_URL: str
 
-    REDDIT_CLIENT_ID: str
-    REDDIT_CLIENT_SECRET: str
-    REDDIT_USERNAME: str
-
     LANGSMITH_TRACING: bool
     LANGSMITH_ENDPOINT: str
     LANGSMITH_API_KEY: str
