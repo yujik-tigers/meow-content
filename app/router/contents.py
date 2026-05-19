@@ -6,7 +6,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from starlette import status
 
-from app.content import meme_analyzer
 from app.content.enums import MemeStatus
 from app.dependencies import (
     inject_meme_repository,
@@ -15,9 +14,7 @@ from app.exceptions import NoApprovedMemeError
 from app.repository import MemeRepository
 from app.schema.common import ApiResponse
 from app.schema.contents import (
-    MemeCandidate,
     MemeContent,
-    MemeSaveData,
     UpdateMemeBackgroundRequest,
     UpdateMemeStatusRequest,
 )
@@ -80,25 +77,25 @@ async def update_meme_status(
     await repository.update_status(meme_id, request.status)
 
 
-@router.post("/memes/analyze", status_code=status.HTTP_201_CREATED)
-async def analyze_meme(
-    meme_candidate: MemeCandidate,
-    repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
-) -> ApiResponse[int]:
-    analysis_result = await meme_analyzer.analyze_meme(meme_candidate.image_url)
-    save_id = await repository.save(
-        MemeSaveData(
-            img_url=meme_candidate.image_url,
-            meme_text=analysis_result.meme_text,
-            meme_text_translation=analysis_result.meme_text_translation,
-            author=meme_candidate.author,
-            source=meme_candidate.source,
-            expressions=analysis_result.expressions,
-            translation=analysis_result.translation,
-            background=analysis_result.background,
-        )
-    )
+# @router.post("/memes/analyze", status_code=status.HTTP_201_CREATED)
+# async def analyze_meme(
+#     meme_candidate: MemeCandidate,
+#     repository: Annotated[MemeRepository, Depends(inject_meme_repository)],
+# ) -> ApiResponse[int]:
+#     analysis_result = await meme_analyzer.analyze_meme(meme_candidate.image_url)
+#     save_id = await repository.save(
+#         MemeSaveData(
+#             img_url=meme_candidate.image_url,
+#             meme_text=analysis_result.meme_text,
+#             meme_text_translation=analysis_result.meme_text_translation,
+#             author=meme_candidate.author,
+#             source=meme_candidate.source,
+#             expressions=analysis_result.expressions,
+#             translation=analysis_result.translation,
+#             background=analysis_result.background,
+#         )
+#     )
 
-    return ApiResponse(
-        status_code=status.HTTP_201_CREATED, status_message="CREATED", content=save_id
-    )
+#     return ApiResponse(
+#         status_code=status.HTTP_201_CREATED, status_message="CREATED", content=save_id
+#     )

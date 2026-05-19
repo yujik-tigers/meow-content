@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from collections.abc import Sequence
 
-T = TypeVar("T")
+from app.repository.mysql.models import Content
 
 
-class RawDataUploader(ABC, Generic[T]):
+class RawDataUploader(ABC):
 
     @abstractmethod
-    async def upload(self, data: T) -> bool: ...
+    async def upload(self, data: Sequence[Content]) -> None: ...

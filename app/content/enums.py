@@ -12,3 +12,15 @@ class MemeStatus(StrEnum):
 class ImageType(StrEnum):
     QUOTE = "quote"
     MEME = "meme"
+
+
+class LiteralType(StrEnum):
+    MOVIE = "movie"
+    BOOK = "book"
+
+
+class ContentType(StrEnum):
+    REDDIT_MEME = "reddit_meme"
+    QUOTE = "quote"
+    LiteralQuote = "literal_quote"
+    FACT = "fact"

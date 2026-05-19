@@ -4,14 +4,9 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.content.quote_image_creator import QuoteImageCreator, quote_image_creator
 from app.repository import MemeRepository
 from app.repository.mysql.engine import AsyncSessionLocal
 from app.repository.mysql.repository import MySQLMemeRepository
-
-
-async def inject_quote_image_creator() -> QuoteImageCreator:
-    return quote_image_creator
 
 
 async def inject_db_session() -> AsyncGenerator[AsyncSession, None]:

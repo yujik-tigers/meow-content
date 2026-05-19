@@ -18,13 +18,6 @@ class Quote:
 
 
 @dataclass(frozen=True)
-class MemeCandidate:
-    image_url: str
-    source: str
-    author: str
-
-
-@dataclass(frozen=True)
 class MemeSaveData:
     img_url: str
     meme_text: str

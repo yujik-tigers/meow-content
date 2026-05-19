@@ -32,10 +32,12 @@
       "justMyCode": false
     },
     {
-      "name": "Script: Load Korean Meme",
+      "name": "Script: Content Scrap And Upload",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/scripts/load_korean_meme_script.py",
+      "module": "script.main",
+      "args": ["--scraper-type", "reddit_meme", "--uploader-type", "mysql"],
+      "envFile": "${workspaceFolder}/.env",
       "env": {
         "PYTHONPATH": "${workspaceFolder}"
       },
