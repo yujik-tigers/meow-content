@@ -43,11 +43,8 @@ class MemeRecord(SQLModel, table=True):
 
 
 class Content(SQLModel, table=True):
-    __mapper_args__ = {"polymorphic_on": "type"}
-    type: ContentType = Field(max_length=50)
-
     id: int | None = Field(default=None, primary_key=True)
-
+    type: ContentType = Field(max_length=50)
     status: MemeStatus = Field(default=MemeStatus.RAW, max_length=20)
     content: str | None = Field(default=None, sa_column=Column(Text))
     content_translation: str | None = Field(default=None, sa_column=Column(Text))
@@ -60,42 +57,55 @@ class Content(SQLModel, table=True):
     )
     used_at: date | None = Field(default=None)
 
-
-class RedditMeme(Content, table=False):
-    __mapper_args__ = {"polymorphic_identity": ContentType.REDDIT_MEME}
-
-    type: ContentType = Field(default=ContentType.REDDIT_MEME)
-    image_url: str = Field(sa_column=Column(Text))
-    author: str = Field(max_length=200)
-    title: str = Field(max_length=200)
-
-
-class Quote(Content, table=False):
-    __mapper_args__ = {"polymorphic_identity": ContentType.QUOTE}
-
-    type: ContentType = Field(default=ContentType.QUOTE)
-    author: str = Field(max_length=200)
-
-    def __init__(self, content: str, **kwargs) -> None:
-        super().__init__(content=content, **kwargs)
+    # RedditMeme / Quote / LiteralQuote
+    author: str | None = Field(default=None, max_length=200)
+    # RedditMeme
+    image_url: str | None = Field(default=None, sa_column=Column(Text))
+    # RedditMeme / LiteralQuote
+    title: str | None = Field(default=None, max_length=200)
+    # LiteralQuote
+    literal_type: LiteralType | None = Field(default=None, max_length=20)
 
 
-class LiteralQuote(Content, table=False):
-    __mapper_args__ = {"polymorphic_identity": ContentType.LiteralQuote}
+class RedditMeme:
+    def __new__(cls, image_url: str, author: str, title: str, **kwargs) -> Content:
+        return Content(
+            type=ContentType.REDDIT_MEME,
+            image_url=image_url,
+            author=author,
+            title=title,
+            **kwargs,
+        )
 
-    type: ContentType = Field(default=ContentType.LiteralQuote)
-    author: str = Field(max_length=200)
-    literal_type: LiteralType = Field(max_length=20)
-    title: str = Field(max_length=200)
 
-    def __init__(self, content: str, **kwargs) -> None:
-        super().__init__(content=content, **kwargs)
+class Quote:
+    def __new__(cls, content: str, author: str, **kwargs) -> Content:
+        return Content(
+            type=ContentType.QUOTE,
+            content=content,
+            author=author,
+            **kwargs,
+        )
 
 
-class Fact(Content, table=False):
-    __mapper_args__ = {"polymorphic_identity": ContentType.FACT}
+class LiteralQuote:
+    def __new__(
+        cls, content: str, author: str, literal_type: LiteralType, title: str, **kwargs
+    ) -> Content:
+        return Content(
+            type=ContentType.LiteralQuote,
+            content=content,
+            author=author,
+            literal_type=literal_type,
+            title=title,
+            **kwargs,
+        )
 
-    type: ContentType = Field(default=ContentType.FACT)
 
-    def __init__(self, content: str, **kwargs) -> None:
-        super().__init__(content=content, **kwargs)
+class Fact:
+    def __new__(cls, content: str, **kwargs) -> Content:
+        return Content(
+            type=ContentType.FACT,
+            content=content,
+            **kwargs,
+        )

@@ -2,6 +2,7 @@ import argparse
 import asyncio
 
 from script.scrap.reddit_meme_scraper import RedditMemeScraper
+from script.upload.local_mysql_uploader import LocalMySQLUploader
 from script.upload.mysql_uploader import MySQLUploader
 
 SCRAPERS = {
@@ -10,6 +11,7 @@ SCRAPERS = {
 
 UPLOADERS = {
     "mysql": MySQLUploader,
+    "local_mysql": LocalMySQLUploader,
 }
 
 
