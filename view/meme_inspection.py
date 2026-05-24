@@ -15,6 +15,32 @@ _ADMIN_PW_HASH = hashlib.sha256(os.environ["ADMIN_PASSWORD"].encode()).hexdigest
 MAX_FAILURES = 5
 LOCKOUT_SECONDS = 60
 
+ALL_CONTENT_TYPES = ["reddit_meme", "quote", "literal_quote", "fact"]
+ALL_STATUSES = ["raw", "analyzed", "pending", "approved", "rejected", "used"]
+STATUS_COLORS = {
+    "raw": "gray",
+    "analyzed": "violet",
+    "pending": "orange",
+    "approved": "green",
+    "rejected": "red",
+    "used": "blue",
+}
+REANALYZABLE_FIELDS = [
+    "content_translation",
+    "expression",
+    "expression_translation",
+    "background",
+]
+REANALYZABLE_FIELD_LABELS = {
+    "content_translation": "번역",
+    "expression": "핵심 표현",
+    "expression_translation": "표현 번역",
+    "background": "배경",
+}
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
 
 @st.cache_resource
 def _auth_state() -> tuple[threading.Lock, dict[str, list[float]]]:
@@ -25,13 +51,6 @@ def _client_ip() -> str:
     headers = st.context.headers
     forwarded = headers.get("X-Forwarded-For") or headers.get("X-Real-Ip", "unknown")
     return forwarded.split(",")[0].strip()
-ALL_STATUSES = ["pending", "approved", "rejected", "used"]
-STATUS_COLORS = {
-    "pending": "orange",
-    "approved": "green",
-    "rejected": "red",
-    "used": "blue",
-}
 
 
 def _is_locked_out(ip: str) -> float:
@@ -65,7 +84,7 @@ def require_auth() -> bool:
     st.session_state.setdefault("authenticated", False)
     if st.session_state.authenticated:
         return True
-    st.title("Meow Meme Dashboard")
+    st.title("Meow Content Dashboard")
     st.subheader("로그인")
 
     ip = _client_ip()
@@ -74,8 +93,11 @@ def require_auth() -> bool:
         st.error(f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요.")
         return False
 
-    pw = st.text_input("비밀번호", type="password")
-    if st.button("로그인"):
+    with st.form("login_form"):
+        pw = st.text_input("비밀번호", type="password")
+        submitted = st.form_submit_button("로그인")
+
+    if submitted:
         if hashlib.sha256(pw.encode()).hexdigest() == _ADMIN_PW_HASH:
             _clear_failures(ip)
             st.session_state.authenticated = True
@@ -91,42 +113,80 @@ def require_auth() -> bool:
     return False
 
 
+# ── State ─────────────────────────────────────────────────────────────────────
+
+
 def init_state() -> None:
     st.session_state.setdefault("base_url", DEFAULT_BASE_URL)
-    st.session_state.setdefault("active_statuses", ["pending"])
+    st.session_state.setdefault("content_type", ALL_CONTENT_TYPES[0])
+    st.session_state.setdefault("content_status", ALL_STATUSES[0])
     st.session_state.setdefault("page_index", 0)
     st.session_state.setdefault("page_size", 20)
     st.session_state.setdefault("last_error", None)
 
 
-def fetch_memes(
-    base_url: str, statuses: list[str], page_index: int, page_size: int
+# ── API ───────────────────────────────────────────────────────────────────────
+
+
+@st.cache_data(ttl=300)
+def fetch_contents(
+    base_url: str,
+    content_type: str,
+    content_status: str,
+    page_index: int,
+    page_size: int,
 ) -> list[dict]:
-    params: list[tuple[str, str | int]] = [("status", s) for s in statuses]
-    params += [("page_index", page_index), ("page_size", page_size)]
     resp = requests.get(
-        f"{base_url}/api/v1/contents/memes/search", params=params, timeout=10
+        f"{base_url}/api/v1/admin/contents",
+        params={
+            "content_type": content_type,
+            "content_status": content_status,
+            "page_index": page_index,
+            "page_size": page_size,
+        },
+        timeout=10,
     )
     resp.raise_for_status()
     return resp.json().get("content", [])
 
 
-def update_background(base_url: str, meme_id: int, background: str) -> None:
+def analyze_content(base_url: str, content_id: int, content_type: str) -> dict:
+    resp = requests.post(
+        f"{base_url}/api/v1/admin/contents/{content_id}/analyze",
+        params={"content_type": content_type},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json().get("content", {})
+
+
+def update_status(
+    base_url: str, content_id: int, from_status: str, to_status: str
+) -> None:
     resp = requests.patch(
-        f"{base_url}/api/v1/contents/memes/{meme_id}/background",
-        json={"background": background},
+        f"{base_url}/api/v1/admin/contents/{content_id}/status",
+        json={"from_status": from_status, "to_status": to_status},
         timeout=10,
     )
     resp.raise_for_status()
 
 
-def update_status(base_url: str, meme_id: int, new_status: str) -> None:
+def reanalyze_fields(
+    base_url: str,
+    content_id: int,
+    content_type: str,
+    fields: list[dict],
+) -> None:
     resp = requests.patch(
-        f"{base_url}/api/v1/contents/memes/{meme_id}/status",
-        json={"status": new_status},
-        timeout=10,
+        f"{base_url}/api/v1/admin/contents/{content_id}",
+        params={"content_type": content_type},
+        json=fields,
+        timeout=60,
     )
     resp.raise_for_status()
+
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 
 
 def render_sidebar() -> None:
@@ -141,30 +201,33 @@ def render_sidebar() -> None:
 
         st.divider()
         st.subheader("Filter")
-        selected: list[str] = []
-        for s in ALL_STATUSES:
-            if st.checkbox(
-                s.capitalize(),
-                value=(s in st.session_state.active_statuses),
-                key=f"cb_{s}",
-            ):
-                selected.append(s)
-        if selected != st.session_state.active_statuses:
-            st.session_state.active_statuses = selected
+
+        def _reset_page() -> None:
             st.session_state.page_index = 0
+
+        st.selectbox(
+            "Content Type",
+            options=ALL_CONTENT_TYPES,
+            key="content_type",
+            on_change=_reset_page,
+        )
+        st.selectbox(
+            "Status",
+            options=ALL_STATUSES,
+            key="content_status",
+            on_change=_reset_page,
+        )
 
         st.divider()
-        page_size = st.select_slider(
-            "Page Size", options=[10, 20, 50], value=st.session_state.page_size
+        st.select_slider(
+            "Page Size", options=[10, 20, 50], key="page_size", on_change=_reset_page
         )
-        if page_size != st.session_state.page_size:
-            st.session_state.page_size = page_size
-            st.session_state.page_index = 0
 
 
-def render_pagination(
-    page_index: int, is_last_page: bool, position: str = "top"
-) -> None:
+# ── Pagination ────────────────────────────────────────────────────────────────
+
+
+def render_pagination(page_index: int, is_last_page: bool, position: str = "top") -> None:
     col_prev, col_info, col_next = st.columns([1, 2, 1])
     with col_prev:
         if st.button(
@@ -191,126 +254,201 @@ def render_pagination(
             st.rerun()
 
 
-def render_action_buttons(meme: dict) -> None:
-    status = meme["status"]
-    meme_id = meme["id"]
+# ── Card ──────────────────────────────────────────────────────────────────────
+
+
+def render_action_buttons(item: dict) -> None:
+    content_id = item["id"]
+    status = item["status"]
+    content_type = item["type"]
     base_url = st.session_state.base_url
 
-    def do_update(new_status: str) -> None:
+    def do_status(to: str) -> None:
         try:
-            update_status(base_url, meme_id, new_status)
+            update_status(base_url, content_id, status, to)
             st.session_state.last_error = None
+            fetch_contents.clear()
         except Exception as e:
             st.session_state.last_error = str(e)
         st.rerun()
 
-    if status == "pending":
+    if status == "raw":
+        if st.button("Analyze", key=f"analyze_{content_id}", type="primary"):
+            try:
+                analyze_content(base_url, content_id, content_type)
+                st.session_state.last_error = None
+                fetch_contents.clear()
+            except Exception as e:
+                st.session_state.last_error = str(e)
+            st.rerun()
+
+    elif status == "analyzed":
+        if st.button("Submit for Review", key=f"submit_{content_id}", type="primary"):
+            do_status("pending")
+
+    elif status == "pending":
         col1, col2, *_ = st.columns(6)
         with col1:
-            if st.button(
-                "Approve",
-                key=f"approve_{meme_id}",
-                type="primary",
-                use_container_width=True,
-            ):
-                do_update("approved")
+            if st.button("Approve", key=f"approve_{content_id}", type="primary", use_container_width=True):
+                do_status("approved")
         with col2:
-            if st.button("Reject", key=f"reject_{meme_id}", use_container_width=True):
-                do_update("rejected")
-    elif status == "approved":
-        col1, col2, *_ = st.columns(6)
-        with col1:
-            if st.button("Reject", key=f"reject_{meme_id}", use_container_width=True):
-                do_update("rejected")
-        with col2:
-            if st.button("Reset", key=f"pending_{meme_id}", use_container_width=True):
-                do_update("pending")
-    elif status == "rejected":
-        col1, col2, *_ = st.columns(6)
-        with col1:
-            if st.button(
-                "Approve",
-                key=f"approve_{meme_id}",
-                type="primary",
-                use_container_width=True,
-            ):
-                do_update("approved")
-        with col2:
-            if st.button("Reset", key=f"pending_{meme_id}", use_container_width=True):
-                do_update("pending")
+            if st.button("Reject", key=f"reject_{content_id}", use_container_width=True):
+                do_status("rejected")
+
+    elif status in ("approved", "rejected"):
+        if st.button("Reset to Pending", key=f"reset_{content_id}", use_container_width=False):
+            do_status("pending")
 
 
-def render_card(meme: dict) -> None:
-    meme_id = meme["id"]
-    with st.container(border=True):
-        col_img, col_meta = st.columns([1, 3])
+def render_reanalyze_expander(item: dict) -> None:
+    if item["status"] == "raw":
+        return
 
-        with col_img:
-            st.markdown(
-                f'<a href="{meme["image_url"]}" target="_blank">'
-                f'<img src="{meme["image_url"]}" width="200" style="border-radius:4px;cursor:pointer"></a>',
-                unsafe_allow_html=True,
-            )
+    content_id = item["id"]
+    content_type = item["type"]
+    base_url = st.session_state.base_url
 
-        with col_meta:
-            status = meme["status"]
-            color = STATUS_COLORS.get(status, "gray")
-            st.markdown(f"**#{meme['id']}** &nbsp; :{color}[{status.upper()}]")
-            st.markdown(f"**밈 텍스트:** {meme['meme_text']}")
-            st.markdown(f"**밈 텍스트 번역:** {meme['meme_text_translation']}")
-            st.markdown(f"**핵심 표현:** `{meme['expressions']}`")
-            st.markdown(f"**한국어:** {meme['translation']}")
-            st.markdown("**배경:**")
-            current_bg = (
-                st.text_area(
-                    "배경",
-                    value=meme.get("background", ""),
-                    key=f"bg_{meme_id}",
-                    height=80,
+    with st.expander("필드 재분석"):
+        selected_fields = []
+        for field in REANALYZABLE_FIELDS:
+            col_check, col_label, col_input = st.columns([1, 2, 5])
+            with col_check:
+                checked = st.checkbox("", key=f"chk_{content_id}_{field}", label_visibility="collapsed")
+            with col_label:
+                st.markdown(f"`{field}` ({REANALYZABLE_FIELD_LABELS[field]})")
+            with col_input:
+                guide = st.text_input(
+                    "프롬프트 가이드",
+                    key=f"pg_{content_id}_{field}",
                     label_visibility="collapsed",
+                    placeholder="재분석 방향 가이드 (선택)",
+                    disabled=not checked,
                 )
-                or ""
-            )
-            if current_bg != meme.get("background", ""):
-                if st.button("저장", key=f"save_bg_{meme_id}", type="primary"):
-                    try:
-                        update_background(
-                            st.session_state.base_url, meme_id, current_bg
-                        )
-                        st.success("배경이 저장되었습니다.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"저장 실패: {e}")
-            created = meme.get("created_at", "")[:10]
-            st.caption(
-                f"출처: {meme['source']}  |  작성자: {meme['author']}  |  생성일: {created}"
-            )
-            if meme.get("used_at"):
-                st.caption(f"사용일: {meme['used_at']}")
+            if checked:
+                selected_fields.append({"field_name": field, "prompt_guide": guide})
 
-        render_action_buttons(meme)
+        if st.button("재분석", key=f"reanalyze_{content_id}", type="primary", disabled=not selected_fields):
+            try:
+                reanalyze_fields(base_url, content_id, content_type, selected_fields)
+                st.session_state.last_error = None
+                fetch_contents.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"재분석 실패: {e}")
+
+
+def render_fields(item: dict) -> None:
+    content_type = item.get("type", "")
+
+    if content_type == "reddit_meme":
+        if item.get("title"):
+            st.markdown(f"**제목:** {item['title']}")
+        if item.get("content"):
+            st.markdown(f"**밈 텍스트:** {item['content']}")
+        if item.get("content_translation"):
+            st.markdown(f"**번역:** {item['content_translation']}")
+        if item.get("expression"):
+            st.markdown(f"**핵심 표현:** `{item['expression']}`")
+        if item.get("expression_translation"):
+            st.markdown(f"**표현 번역:** {item['expression_translation']}")
+        if item.get("background"):
+            st.markdown(f"**배경:** {item['background']}")
+
+    elif content_type == "quote":
+        if item.get("content"):
+            st.markdown(f"**인용:** {item['content']}")
+        if item.get("content_translation"):
+            st.markdown(f"**번역:** {item['content_translation']}")
+        if item.get("expression"):
+            st.markdown(f"**핵심 표현:** `{item['expression']}`")
+        if item.get("expression_translation"):
+            st.markdown(f"**표현 번역:** {item['expression_translation']}")
+        if item.get("background"):
+            st.markdown(f"**배경:** {item['background']}")
+        if item.get("author"):
+            st.caption(f"— {item['author']}")
+
+    elif content_type == "literal_quote":
+        if item.get("title"):
+            st.markdown(f"**작품:** {item['title']} ({item.get('literal_type', '')})")
+        if item.get("content"):
+            st.markdown(f"**인용:** {item['content']}")
+        if item.get("content_translation"):
+            st.markdown(f"**번역:** {item['content_translation']}")
+        if item.get("expression"):
+            st.markdown(f"**핵심 표현:** `{item['expression']}`")
+        if item.get("expression_translation"):
+            st.markdown(f"**표현 번역:** {item['expression_translation']}")
+        if item.get("background"):
+            st.markdown(f"**배경:** {item['background']}")
+        if item.get("author"):
+            st.caption(f"— {item['author']}")
+
+    elif content_type == "fact":
+        if item.get("content"):
+            st.markdown(f"**팩트:** {item['content']}")
+        if item.get("content_translation"):
+            st.markdown(f"**번역:** {item['content_translation']}")
+        if item.get("background"):
+            st.markdown(f"**배경:** {item['background']}")
+
+
+def render_card(item: dict) -> None:
+    content_id = item["id"]
+    status = item["status"]
+    content_type = item["type"]
+    color = STATUS_COLORS.get(status, "gray")
+
+    with st.container(border=True):
+        st.markdown(
+            f"**#{content_id}** &nbsp; `{content_type}` &nbsp; :{color}[{status.upper()}]"
+        )
+        created = (item.get("created_at") or "")[:10]
+        meta = f"생성일: {created}"
+        if item.get("author"):
+            meta = f"작성자: {item['author']}  |  " + meta
+        if item.get("used_at"):
+            meta += f"  |  사용일: {item['used_at']}"
+        st.caption(meta)
+
+        if content_type == "reddit_meme" and item.get("image_url"):
+            col_img, col_fields = st.columns([1, 3])
+            with col_img:
+                st.markdown(
+                    f'<a href="{item["image_url"]}" target="_blank">'
+                    f'<img src="{item["image_url"]}" width="200" style="border-radius:4px;cursor:pointer"></a>',
+                    unsafe_allow_html=True,
+                )
+            with col_fields:
+                render_fields(item)
+        else:
+            render_fields(item)
+
+        st.divider()
+        render_action_buttons(item)
+        render_reanalyze_expander(item)
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 
 def main() -> None:
-    st.set_page_config(page_title="Meow Meme Dashboard", layout="wide")
+    st.set_page_config(page_title="Meow Content Dashboard", layout="wide")
     if not require_auth():
         return
     init_state()
     render_sidebar()
 
-    st.title("Meow Meme Dashboard")
+    st.title("Meow Content Dashboard")
 
     if st.session_state.last_error:
         st.error(f"API 오류: {st.session_state.last_error}")
 
-    if not st.session_state.active_statuses:
-        st.warning("사이드바에서 하나 이상의 상태를 선택하세요.")
-        return
-
     try:
-        memes = fetch_memes(
+        items = fetch_contents(
             st.session_state.base_url,
-            st.session_state.active_statuses,
+            st.session_state.content_type,
+            st.session_state.content_status,
             st.session_state.page_index,
             st.session_state.page_size,
         )
@@ -321,16 +459,17 @@ def main() -> None:
         st.error(f"오류 발생: {e}")
         return
 
-    is_last_page = len(memes) < st.session_state.page_size
+    is_last_page = len(items) < st.session_state.page_size
+    st.caption(f"{len(items)}개 표시 중")
 
-    st.caption(f"{len(memes)}개 표시 중")
-
-    if not memes:
-        st.info("해당 조건에 맞는 밈이 없습니다.")
+    if not items:
+        st.info("해당 조건에 맞는 콘텐츠가 없습니다.")
         return
 
-    for meme in memes:
-        render_card(meme)
+    render_pagination(st.session_state.page_index, is_last_page, position="top")
+
+    for item in items:
+        render_card(item)
 
     render_pagination(st.session_state.page_index, is_last_page, position="bottom")
 
