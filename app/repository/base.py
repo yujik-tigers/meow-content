@@ -1,27 +1,28 @@
 from abc import ABC, abstractmethod
 from datetime import date
 
-from app.content.enums import MemeStatus
-from app.schema.contents import MemeContent, MemeSaveData
+from app.enums import ContentStatus, ContentType
+from app.schema.content import Content
 
 
-class MemeRepository(ABC):
-    @abstractmethod
-    async def save(self, data: MemeSaveData) -> int: ...
+class ContentRepository(ABC):
 
     @abstractmethod
-    async def get_by_used_at(self, used_at: date) -> MemeContent | None: ...
+    async def update_status(self, content_id: int, status: ContentStatus) -> None: ...
 
     @abstractmethod
-    async def mark_as_used(self, meme_id: int, used_at: date) -> MemeContent: ...
+    async def get_reserved_content_at(self, used_at: date) -> Content: ...
 
     @abstractmethod
-    async def update_background(self, meme_id: int, background: str) -> None: ...
+    async def fetch_admin_contents_by(
+        self, status: ContentStatus, content_type: ContentType, offset: int, limit: int
+    ) -> list[Content]: ...
 
     @abstractmethod
-    async def update_status(self, meme_id: int, status: MemeStatus) -> None: ...
+    async def get_admin_content_by(self, content_id: int) -> Content: ...
 
     @abstractmethod
-    async def fetch_by_statuses(
-        self, statuses: list[MemeStatus], offset: int, limit: int
-    ) -> list[MemeContent]: ...
+    async def update_content(self, content: Content) -> None: ...
+
+    @abstractmethod
+    async def reserve_daily_content(self, used_at: date) -> Content: ...

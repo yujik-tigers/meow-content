@@ -1,7 +1,9 @@
 import argparse
 import asyncio
 
+from script.scrap.base import RawDataScraper
 from script.scrap.reddit_meme_scraper import RedditMemeScraper
+from script.upload.base import RawDataUploader
 from script.upload.local_mysql_uploader import LocalMySQLUploader
 from script.upload.mysql_uploader import MySQLUploader
 
@@ -16,8 +18,8 @@ UPLOADERS = {
 
 
 async def main(scraper_type: str, uploader_type: str) -> None:
-    scraper = SCRAPERS[scraper_type]()
-    uploader = UPLOADERS[uploader_type]()
+    scraper: RawDataScraper = SCRAPERS[scraper_type]()
+    uploader: RawDataUploader = UPLOADERS[uploader_type]()
 
     raw_data = await scraper.scrap()
     entities = [item.to_entity() for item in raw_data]

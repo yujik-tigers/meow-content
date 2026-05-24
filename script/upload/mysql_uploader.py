@@ -6,7 +6,7 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sshtunnel import SSHTunnelForwarder
 
-from app.repository.mysql.models import Content
+from app.repository.mysql._models import ContentRecord
 from script.upload.base import RawDataUploader
 
 
@@ -23,7 +23,7 @@ class MySQLUploader(RawDataUploader):
         self._local_bind_port = int(os.environ["LOCAL_BIND_PORT"])
 
     @override
-    async def upload(self, data: Sequence[Content]) -> None:
+    async def upload(self, data: Sequence[ContentRecord]) -> None:
         with SSHTunnelForwarder(
             self._host,
             ssh_username=self._hostname,

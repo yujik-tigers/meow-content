@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from app.repository.mysql.models import Content
+from app.repository.mysql._models import ContentRecord
 
 
 class RawDataUploader(ABC):
 
     @abstractmethod
-    async def upload(self, data: Sequence[Content]) -> None: ...
+    async def upload(self, data: Sequence[ContentRecord]) -> None: ...

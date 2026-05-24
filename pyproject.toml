@@ -24,7 +24,8 @@ dependencies = [
     "greenlet (>=3.5.0,<4.0.0)",
     "streamlit (>=1.45.0,<2.0.0)",
     "requests (>=2.32.0,<3.0.0)",
-    "sshtunnel (>=0.4.0,<0.5.0)"
+    "sshtunnel (>=0.4.0,<0.5.0)",
+    "apscheduler (>=3.11,<4)"
 ]
 
 
@@ -34,8 +35,19 @@ typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 
+[tool.ruff.lint]
+extend-select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+banned-api = {"app.repository.mysql._models" = {msg = "MySQL 엔티티는 repository 레이어를 통해서만 접근해야 합니다"}}
+
+[tool.ruff.lint.per-file-ignores]
+"app/repository/mysql/repository.py" = ["TID251"]
+"script/**" = ["TID251"]
+
 [tool.poetry.group.dev.dependencies]
 pyright = "^1.1.408"
+ruff = "^0.15.14"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -1,9 +1,10 @@
 from enum import StrEnum
 
 
-class MemeStatus(StrEnum):
+class ContentStatus(StrEnum):
     RAW = "raw"
     ANALYZED = "analyzed"
+    PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
     USED = "used"

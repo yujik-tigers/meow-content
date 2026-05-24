@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     MYSQL_URL: str
 
+    SCHEDULER_HOUR: int
+    SCHEDULER_MINUTE: int
+
     LANGSMITH_TRACING: bool
     LANGSMITH_ENDPOINT: str
     LANGSMITH_API_KEY: str

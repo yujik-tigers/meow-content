@@ -2,7 +2,7 @@ import glob
 import os
 from datetime import date
 
-from app.content.enums import ImageType
+from app.enums import ImageType
 
 
 def make_image_path_by(

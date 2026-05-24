@@ -5,7 +5,7 @@ from typing import override
 from sqlalchemy.engine.url import URL
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.repository.mysql.models import Content
+from app.repository.mysql._models import ContentRecord
 from script.upload.base import RawDataUploader
 
 
@@ -19,7 +19,7 @@ class LocalMySQLUploader(RawDataUploader):
         self._database = os.environ["REMOTE_MYSQL_DATABASE"]
 
     @override
-    async def upload(self, data: Sequence[Content]) -> None:
+    async def upload(self, data: Sequence[ContentRecord]) -> None:
         engine = create_async_engine(
             URL.create(
                 "mysql+aiomysql",

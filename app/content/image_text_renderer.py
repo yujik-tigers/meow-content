@@ -3,7 +3,7 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.schema.contents import Quote
+from app.schema.content import Quote
 from app.settings import app_config
 
 MAX_LINES = 2

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.repository.mysql.models import Content, RedditMeme
+from app.repository.mysql._models import ContentRecord, RedditMeme
 
 
 @dataclass(frozen=True)
@@ -9,7 +9,7 @@ class RedditMemeRaw:
     author: str
     title: str
 
-    def to_entity(self) -> Content:
+    def to_entity(self) -> ContentRecord:
         return RedditMeme(
             image_url=self.image_url,
             author=self.author,
