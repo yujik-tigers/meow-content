@@ -40,7 +40,7 @@ class MySQLContentRepository(ContentRepository):
         record.status = status
 
     @override
-    async def fetch_admin_contents_by(
+    async def fetch_contents_by(
         self, status: ContentStatus, content_type: ContentType, offset: int, limit: int
     ) -> list[Content]:
         result = await self._session.exec(
@@ -72,7 +72,7 @@ class MySQLContentRepository(ContentRepository):
         return record.to_content()
 
     @override
-    async def get_admin_content_by(self, content_id: int) -> Content:
+    async def get_content_by(self, content_id: int) -> Content:
         record = await self._session.get(ContentRecord, content_id)
         if record is None:
             raise ContentNotFoundError(content_id)

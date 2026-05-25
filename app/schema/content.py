@@ -23,10 +23,9 @@ class UpdateContentStatusRequest:
                 )
 
         if self.to_status == ContentStatus.USED:
-            if self.from_status not in (ContentStatus.APPROVED, ContentStatus.REJECTED):
-                raise ValueError(
-                    f"Cannot transition to {self.to_status} from {self.from_status}: from_status must be APPROVED or ANALYZED"
-                )
+            raise ValueError(
+                f"Cannot transition to {self.to_status} using API request, It only can be changed by scheduler"
+            )
 
 
 @dataclass(frozen=True, kw_only=True)
