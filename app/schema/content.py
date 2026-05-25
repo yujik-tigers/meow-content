@@ -16,7 +16,7 @@ class UpdateContentStatusRequest:
     to_status: ContentStatus
 
     def __post_init__(self) -> None:
-        if self.to_status in (ContentStatus.APPROVED, ContentStatus.REJECTED):
+        if self.to_status == ContentStatus.APPROVED:
             if self.from_status != ContentStatus.PENDING:
                 raise ValueError(
                     f"Cannot transition to {self.to_status} from {self.from_status}: from_status must be PENDING"

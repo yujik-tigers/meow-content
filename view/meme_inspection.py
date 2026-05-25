@@ -90,7 +90,9 @@ def require_auth() -> bool:
     ip = _client_ip()
     remaining = _is_locked_out(ip)
     if remaining > 0:
-        st.error(f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요.")
+        st.error(
+            f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요."
+        )
         return False
 
     with st.form("login_form"):
@@ -106,7 +108,9 @@ def require_auth() -> bool:
             _record_failure(ip)
             remaining = _is_locked_out(ip)
             if remaining > 0:
-                st.error(f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요.")
+                st.error(
+                    f"너무 많은 실패 시도로 잠겼습니다. {int(remaining)}초 후에 다시 시도하세요."
+                )
             else:
                 left = MAX_FAILURES - len(_auth_state()[1].get(ip, []))
                 st.error(f"비밀번호가 올바르지 않습니다. ({left}회 남음)")
@@ -123,6 +127,27 @@ def init_state() -> None:
     st.session_state.setdefault("page_index", 0)
     st.session_state.setdefault("page_size", 20)
     st.session_state.setdefault("last_error", None)
+    st.session_state.setdefault("sel_gen", 0)
+
+
+def _sel_key(content_id: int) -> str:
+    return f"sel_{content_id}_{st.session_state.sel_gen}"
+
+
+def _get_selected_ids(items: list[dict]) -> set[int]:
+    return {
+        item["id"]
+        for item in items
+        if st.session_state.get(_sel_key(item["id"]), False)
+    }
+
+
+def _deselect_all() -> None:
+    st.session_state.sel_gen += 1
+
+
+def _clear_all_sel_keys() -> None:
+    st.session_state.sel_gen += 1
 
 
 # ── API ───────────────────────────────────────────────────────────────────────
@@ -204,6 +229,7 @@ def render_sidebar() -> None:
 
         def _reset_page() -> None:
             st.session_state.page_index = 0
+            _clear_all_sel_keys()
 
         st.selectbox(
             "Content Type",
@@ -224,10 +250,74 @@ def render_sidebar() -> None:
         )
 
 
+# ── Bulk Actions ──────────────────────────────────────────────────────────────
+
+_BULK_ACTIONS: dict[str, list[tuple[str, str]]] = {
+    "raw": [("bulk reject", "rejected")],
+    "analyzed": [("bulk pending", "pending"), ("bulk reject", "rejected")],
+    "pending": [("bulk approve", "approved"), ("bulk reject", "rejected")],
+    "approved": [("bulk pending", "pending"), ("bulk reject", "rejected")],
+    "rejected": [("bulk pending", "pending")],
+}
+
+
+def render_bulk_actions(items: list[dict], selected_ids: set[int]) -> None:
+    status = st.session_state.content_status
+    actions = _BULK_ACTIONS.get(status, [])
+
+    base_url = st.session_state.base_url
+    all_ids = {item["id"] for item in items}
+    all_selected = bool(selected_ids) and selected_ids >= all_ids
+
+    with st.container(border=True):
+        n_actions = len(actions) if selected_ids else 0
+        cols = st.columns([3] + [2] * n_actions + [2])
+
+        with cols[0]:
+            label = (
+                f"**{len(selected_ids)}개 선택됨**" if selected_ids else "**선택 없음**"
+            )
+            st.markdown(label)
+
+        for i, (label, to_status) in enumerate(actions):
+            if not selected_ids:
+                break
+            with cols[i + 1]:
+                btn_type = "primary" if to_status == "approved" else "secondary"
+                if st.button(
+                    label,
+                    key=f"bulk_{to_status}",
+                    type=btn_type,
+                    use_container_width=True,
+                ):
+                    errors = []
+                    for content_id in selected_ids:
+                        try:
+                            update_status(base_url, content_id, status, to_status)
+                        except Exception as e:
+                            errors.append(f"#{content_id}: {e}")
+                    fetch_contents.clear()
+                    _deselect_all()
+                    st.session_state.last_error = "\n".join(errors) if errors else None
+                    st.rerun()
+
+        with cols[-1]:
+            select_label = "전체 해제" if all_selected else "전체 선택"
+            if st.button(select_label, key="bulk_select_all", use_container_width=True):
+                if all_selected:
+                    _deselect_all()
+                else:
+                    st.session_state.sel_gen += 1
+                    st.session_state["_select_all_ids"] = all_ids
+                st.rerun()
+
+
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 
-def render_pagination(page_index: int, is_last_page: bool, position: str = "top") -> None:
+def render_pagination(
+    page_index: int, is_last_page: bool, position: str = "top"
+) -> None:
     col_prev, col_info, col_next = st.columns([1, 2, 1])
     with col_prev:
         if st.button(
@@ -272,32 +362,77 @@ def render_action_buttons(item: dict) -> None:
             st.session_state.last_error = str(e)
         st.rerun()
 
+    col1, col2, *_ = st.columns(6)
+
     if status == "raw":
-        if st.button("Analyze", key=f"analyze_{content_id}", type="primary"):
-            try:
-                analyze_content(base_url, content_id, content_type)
-                st.session_state.last_error = None
-                fetch_contents.clear()
-            except Exception as e:
-                st.session_state.last_error = str(e)
-            st.rerun()
-
-    elif status == "analyzed":
-        if st.button("Submit for Review", key=f"submit_{content_id}", type="primary"):
-            do_status("pending")
-
-    elif status == "pending":
-        col1, col2, *_ = st.columns(6)
         with col1:
-            if st.button("Approve", key=f"approve_{content_id}", type="primary", use_container_width=True):
-                do_status("approved")
+            if st.button(
+                "Analyze",
+                key=f"analyze_{content_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                try:
+                    analyze_content(base_url, content_id, content_type)
+                    st.session_state.last_error = None
+                    fetch_contents.clear()
+                except Exception as e:
+                    st.session_state.last_error = str(e)
+                st.rerun()
         with col2:
-            if st.button("Reject", key=f"reject_{content_id}", use_container_width=True):
+            if st.button(
+                "Reject", key=f"reject_{content_id}", use_container_width=True
+            ):
                 do_status("rejected")
 
-    elif status in ("approved", "rejected"):
-        if st.button("Reset to Pending", key=f"reset_{content_id}", use_container_width=False):
-            do_status("pending")
+    elif status == "analyzed":
+        with col1:
+            if st.button(
+                "Submit for Review",
+                key=f"submit_{content_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                do_status("pending")
+        with col2:
+            if st.button(
+                "Reject", key=f"reject_{content_id}", use_container_width=True
+            ):
+                do_status("rejected")
+
+    elif status == "pending":
+        with col1:
+            if st.button(
+                "Approve",
+                key=f"approve_{content_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                do_status("approved")
+        with col2:
+            if st.button(
+                "Reject", key=f"reject_{content_id}", use_container_width=True
+            ):
+                do_status("rejected")
+
+    elif status == "approved":
+        with col1:
+            if st.button(
+                "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
+            ):
+                do_status("pending")
+        with col2:
+            if st.button(
+                "Reject", key=f"reject_{content_id}", use_container_width=True
+            ):
+                do_status("rejected")
+
+    elif status == "rejected":
+        with col1:
+            if st.button(
+                "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
+            ):
+                do_status("pending")
 
 
 def render_reanalyze_expander(item: dict) -> None:
@@ -313,7 +448,9 @@ def render_reanalyze_expander(item: dict) -> None:
         for field in REANALYZABLE_FIELDS:
             col_check, col_label, col_input = st.columns([1, 2, 5])
             with col_check:
-                checked = st.checkbox("", key=f"chk_{content_id}_{field}", label_visibility="collapsed")
+                checked = st.checkbox(
+                    "", key=f"chk_{content_id}_{field}", label_visibility="collapsed"
+                )
             with col_label:
                 st.markdown(f"`{field}` ({REANALYZABLE_FIELD_LABELS[field]})")
             with col_input:
@@ -327,7 +464,12 @@ def render_reanalyze_expander(item: dict) -> None:
             if checked:
                 selected_fields.append({"field_name": field, "prompt_guide": guide})
 
-        if st.button("재분석", key=f"reanalyze_{content_id}", type="primary", disabled=not selected_fields):
+        if st.button(
+            "재분석",
+            key=f"reanalyze_{content_id}",
+            type="primary",
+            disabled=not selected_fields,
+        ):
             try:
                 reanalyze_fields(base_url, content_id, content_type, selected_fields)
                 st.session_state.last_error = None
@@ -400,9 +542,19 @@ def render_card(item: dict) -> None:
     color = STATUS_COLORS.get(status, "gray")
 
     with st.container(border=True):
-        st.markdown(
-            f"**#{content_id}** &nbsp; `{content_type}` &nbsp; :{color}[{status.upper()}]"
-        )
+        col_check, col_info = st.columns([0.3, 9.7])
+        with col_check:
+            preselected = content_id in st.session_state.get("_select_all_ids", set())
+            st.checkbox(
+                "선택",
+                value=preselected,
+                key=_sel_key(content_id),
+                label_visibility="collapsed",
+            )
+        with col_info:
+            st.markdown(
+                f"**#{content_id}** &nbsp; `{content_type}` &nbsp; :{color}[{status.upper()}]"
+            )
         created = (item.get("created_at") or "")[:10]
         meta = f"생성일: {created}"
         if item.get("author"):
@@ -471,7 +623,10 @@ def main() -> None:
     for item in items:
         render_card(item)
 
+    st.session_state.pop("_select_all_ids", None)
+    selected_ids = _get_selected_ids(items)
     render_pagination(st.session_state.page_index, is_last_page, position="bottom")
+    render_bulk_actions(items, selected_ids)
 
 
 if __name__ == "__main__":
