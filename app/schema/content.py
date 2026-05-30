@@ -5,12 +5,6 @@ from app.enums import ContentStatus, ContentType, LiteralType
 
 
 @dataclass(frozen=True)
-class Quote:
-    text: str
-    speaker: str
-
-
-@dataclass(frozen=True)
 class UpdateContentStatusRequest:
     from_status: ContentStatus
     to_status: ContentStatus

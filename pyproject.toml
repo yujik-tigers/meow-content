@@ -45,6 +45,7 @@ banned-api = {"app.repository.mysql._models" = {msg = "MySQL 엔티티는 reposi
 [tool.ruff.lint.per-file-ignores]
 "app/repository/mysql/repository.py" = ["TID251"]
 "script/**" = ["TID251"]
+"tests/**" = ["TID251"]
 
 [tool.poetry.group.dev.dependencies]
 pyright = "^1.1.408"

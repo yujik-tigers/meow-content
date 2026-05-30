@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-T = TypeVar("T")
+from script.schema import RawData
+
+T = TypeVar("T", bound=RawData)
 
 
 class RawDataScraper(ABC, Generic[T]):

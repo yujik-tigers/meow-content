@@ -1,25 +1,28 @@
 import argparse
 import asyncio
 
+from script.schema import RawData
 from script.scrap.base import RawDataScraper
+from script.scrap.daily_quote_scraper import DailyQuoteScraper
 from script.scrap.reddit_meme_scraper import RedditMemeScraper
 from script.upload.base import RawDataUploader
 from script.upload.local_mysql_uploader import LocalMySQLUploader
 from script.upload.mysql_uploader import MySQLUploader
 
-SCRAPERS = {
-    "reddit_meme": RedditMemeScraper,
+SCRAPERS: dict[str, RawDataScraper] = {
+    "reddit_meme": RedditMemeScraper(),
+    "daily_quote": DailyQuoteScraper(),
 }
 
-UPLOADERS = {
-    "mysql": MySQLUploader,
-    "local_mysql": LocalMySQLUploader,
+UPLOADERS: dict[str, RawDataUploader] = {
+    "mysql": MySQLUploader(),
+    "local_mysql": LocalMySQLUploader(),
 }
 
 
 async def main(scraper_type: str, uploader_type: str) -> None:
-    scraper: RawDataScraper = SCRAPERS[scraper_type]()
-    uploader: RawDataUploader = UPLOADERS[uploader_type]()
+    scraper: RawDataScraper[RawData] = SCRAPERS[scraper_type]
+    uploader: RawDataUploader = UPLOADERS[uploader_type]
 
     raw_data = await scraper.scrap()
     entities = [item.to_entity() for item in raw_data]
