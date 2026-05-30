@@ -31,7 +31,11 @@ class MemeAnalyzeResult(BaseModel):
 class RedditMemeAnalyzer(ContentAnalyzer):
 
     def __init__(self) -> None:
-        llm = ChatOpenAI(model="gpt-5.2", verbosity="medium", reasoning_effort="medium")
+        self._llm = ChatOpenAI(
+            model="gpt-5.2", verbosity="medium", reasoning_effort="medium"
+        )
+
+    async def analyze_raw_content(self, content: Content) -> Content:
         system_prompt_template = SystemMessagePromptTemplate.from_template("""
         You are an English language education assistant that analyzes meme images for Korean learners.
         Your job is to extract the meme text and surface one expression that is genuinely worth learning.
@@ -63,12 +67,9 @@ class RedditMemeAnalyzer(ContentAnalyzer):
                 human_prompt_template,
             ]
         )
+        chain = prompt | self._llm.with_structured_output(MemeAnalyzeResult)
 
-        self._llm = llm
-        self._chain = prompt | llm.with_structured_output(MemeAnalyzeResult)
-
-    async def analyze_raw_content(self, content: Content) -> Content:
-        analysis_result = await self._chain.ainvoke({"img_url": content.image_url})
+        analysis_result = await chain.ainvoke({"img_url": content.image_url})
         if not isinstance(analysis_result, MemeAnalyzeResult):
             raise ValueError("Unexpected analysis result type")
         analysis_result = cast(MemeAnalyzeResult, analysis_result)
