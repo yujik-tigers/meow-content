@@ -14,6 +14,10 @@ os.environ.setdefault("LANGSMITH_TRACING", "false")
 os.environ.setdefault("LANGSMITH_ENDPOINT", "http://fake.langsmith.dev")
 os.environ.setdefault("LANGSMITH_API_KEY", "test-langsmith-key")
 os.environ.setdefault("LANGSMITH_PROJECT", "test-project")
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "test-access-key")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+os.environ.setdefault("AWS_REGION", "us-east-1")
+os.environ.setdefault("AWS_S3_BUCKET_NAME", "test-bucket")
 
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,6 +27,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.analyzer.base import ContentAnalyzer
 from app.enums import ContentStatus, ContentType
+from app.image_generator.base import ImageGenerator
 from app.repository.base import ContentRepository
 from app.schema.content import Content
 
@@ -73,12 +78,18 @@ def mock_analyzer() -> AsyncMock:
 
 
 @pytest.fixture
-async def client(mock_repository, mock_analyzer):
-    from app.dependencies import inject_analyzer, inject_repository
+def mock_image_generator() -> AsyncMock:
+    return AsyncMock(spec=ImageGenerator)
+
+
+@pytest.fixture
+async def client(mock_repository, mock_analyzer, mock_image_generator):
+    from app.dependencies import inject_analyzer, inject_image_generator, inject_repository
     from app.main import app
 
     app.dependency_overrides[inject_repository] = lambda: mock_repository
     app.dependency_overrides[inject_analyzer] = lambda: mock_analyzer
+    app.dependency_overrides[inject_image_generator] = lambda: mock_image_generator
 
     with (
         patch("app.main.create_tables", new=AsyncMock()),

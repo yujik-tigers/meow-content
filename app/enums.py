@@ -25,3 +25,8 @@ class ContentType(StrEnum):
     QUOTE = "quote"
     LiteralQuote = "literal_quote"
     FACT = "fact"
+
+
+class NanoBananaModel(StrEnum):
+    NANO_BANANA_2 = "gemini-3.1-flash-image"
+    NANO_BANANA_PRO = "gemini-3-pro-image"

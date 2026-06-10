@@ -8,6 +8,85 @@ from app.exceptions import ContentNotFoundError
 from app.schema.content import ReanalyzeContentField
 
 
+async def test_generate_image_for_content(
+    client: AsyncClient,
+    mock_repository: AsyncMock,
+    mock_image_generator: AsyncMock,
+    make_content,
+) -> None:
+    content_id = 1
+    content = make_content(id=content_id, status=ContentStatus.ANALYZED)
+    generated = make_content(
+        id=content_id,
+        status=ContentStatus.PENDING,
+        image_url="https://s3.example.com/gen.jpg",
+    )
+
+    mock_repository.get_content_by.return_value = content
+    mock_image_generator.generate.return_value = generated
+
+    response = await client.post(f"/api/v1/admin/contents/{content_id}/image")
+
+    assert response.status_code == 200
+    mock_repository.get_content_by.assert_called_once_with(content_id)
+    mock_image_generator.generate.assert_called_once_with(content)
+    mock_repository.update_content.assert_called_once_with(generated)
+
+
+async def test_generate_image_content_not_found(
+    client: AsyncClient, mock_repository: AsyncMock
+) -> None:
+    mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
+
+    response = await client.post("/api/v1/admin/contents/999/image")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Content not found: 999"
+
+
+async def test_regenerate_image_for_content(
+    client: AsyncClient,
+    mock_repository: AsyncMock,
+    mock_image_generator: AsyncMock,
+    make_content,
+) -> None:
+    content_id = 1
+    prompt = "make it more vibrant"
+    content = make_content(id=content_id, status=ContentStatus.PENDING)
+    regenerated = make_content(
+        id=content_id,
+        status=ContentStatus.PENDING,
+        image_url="https://s3.example.com/regen.jpg",
+    )
+
+    mock_repository.get_content_by.return_value = content
+    mock_image_generator.regenerate.return_value = regenerated
+
+    response = await client.post(
+        f"/api/v1/admin/contents/{content_id}/image/regenerate",
+        params={"prompt": prompt},
+    )
+
+    assert response.status_code == 200
+    mock_repository.get_content_by.assert_called_once_with(content_id)
+    mock_image_generator.regenerate.assert_called_once_with(content, prompt)
+    mock_repository.update_content.assert_called_once_with(regenerated)
+
+
+async def test_regenerate_image_content_not_found(
+    client: AsyncClient, mock_repository: AsyncMock
+) -> None:
+    mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
+
+    response = await client.post(
+        "/api/v1/admin/contents/999/image/regenerate",
+        params={"prompt": "test"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Content not found: 999"
+
+
 async def test_list_contents(
     client: AsyncClient, mock_repository: AsyncMock, make_content
 ) -> None:

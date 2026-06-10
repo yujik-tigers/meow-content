@@ -81,9 +81,14 @@ class MySQLContentRepository(ContentRepository):
     @override
     @transactional
     async def reserve_daily_content(self, used_at: date) -> Content:
+        content_type = (
+            ContentType.QUOTE if used_at.day % 2 == 1 else ContentType.REDDIT_MEME
+        )
+
         result = await self._session.exec(
             select(ContentRecord)
             .where(col(ContentRecord.status) == ContentStatus.APPROVED)
+            .where(col(ContentRecord.type) == content_type)
             .order_by(col(ContentRecord.id).asc())
             .limit(1)
         )

@@ -1,3 +1,4 @@
+import json
 from typing import Literal
 
 import httpx
@@ -18,7 +19,24 @@ class RedditClient:
                 params={"limit": count, "t": time_filter},
                 headers={"User-Agent": "meow-content/0.1"},
             )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 403:
+                raise
+            url = (
+                f"https://www.reddit.com/r/{self._SUBREDDIT}/{sort}.json"
+                f"?limit={count}&t={time_filter}"
+            )
+            fallback_path = "script/reddit_fallback.json"
+            print("403 에러 발생. 브라우저에서 아래 URL을 열어 JSON을 저장하세요:")
+            print(f"  {url}")
+            print(f"저장 경로: {fallback_path}")
+            input("저장 완료 후 Enter를 누르세요...")
+            with open(fallback_path) as f:
+                data = json.load(f)
+            open(fallback_path, "w").close()
+            return self._parse(data)
         return self._parse(response.json())
 
     def _parse(self, data: dict) -> list[RedditMemeRaw]:

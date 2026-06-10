@@ -36,7 +36,12 @@
       "type": "python",
       "request": "launch",
       "module": "script.main",
-      "args": ["--scraper-type", "reddit_meme", "--uploader-type", "mysql"],
+      "args": [
+        "--scraper-type",
+        "daily_quote",
+        "--uploader-type",
+        "local_mysql"
+      ],
       "envFile": "${workspaceFolder}/script/.env",
       "env": {
         "PYTHONPATH": "${workspaceFolder}"

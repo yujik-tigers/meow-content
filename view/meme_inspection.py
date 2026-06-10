@@ -211,6 +211,26 @@ def reanalyze_fields(
     resp.raise_for_status()
 
 
+def generate_image(base_url: str, content_id: int, content_type: str) -> dict:
+    resp = requests.post(
+        f"{base_url}/api/v1/admin/contents/{content_id}/image",
+        params={"content_type": content_type},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json().get("content", {})
+
+
+def regenerate_image(base_url: str, content_id: int, prompt: str) -> dict:
+    resp = requests.post(
+        f"{base_url}/api/v1/admin/contents/{content_id}/image/regenerate",
+        params={"prompt": prompt},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json().get("content", {})
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 
@@ -388,12 +408,18 @@ def render_action_buttons(item: dict) -> None:
     elif status == "analyzed":
         with col1:
             if st.button(
-                "Submit for Review",
-                key=f"submit_{content_id}",
+                "이미지 생성",
+                key=f"gen_image_{content_id}",
                 type="primary",
                 use_container_width=True,
             ):
-                do_status("pending")
+                try:
+                    generate_image(base_url, content_id, content_type)
+                    st.session_state.last_error = None
+                    fetch_contents.clear()
+                except Exception as e:
+                    st.session_state.last_error = str(e)
+                st.rerun()
         with col2:
             if st.button(
                 "Reject", key=f"reject_{content_id}", use_container_width=True
@@ -433,6 +459,39 @@ def render_action_buttons(item: dict) -> None:
                 "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
             ):
                 do_status("pending")
+
+
+def render_image_regenerate_expander(item: dict) -> None:
+    if item["status"] != "pending":
+        return
+
+    content_id = item["id"]
+    content_type = item["type"]
+    base_url = st.session_state.base_url
+    is_reddit_meme = content_type == "reddit_meme"
+
+    with st.expander("이미지 재생성"):
+        if is_reddit_meme:
+            st.info("reddit_meme은 이미지 재생성을 지원하지 않습니다.")
+        else:
+            prompt = st.text_input(
+                "재생성 프롬프트",
+                key=f"regen_prompt_{content_id}",
+                placeholder="이미지 재생성 방향 입력",
+            )
+            if st.button(
+                "이미지 재생성",
+                key=f"regen_image_{content_id}",
+                type="primary",
+                disabled=not prompt,
+            ):
+                try:
+                    regenerate_image(base_url, content_id, prompt)
+                    st.session_state.last_error = None
+                    fetch_contents.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"이미지 재생성 실패: {e}")
 
 
 def render_reanalyze_expander(item: dict) -> None:
@@ -563,7 +622,7 @@ def render_card(item: dict) -> None:
             meta += f"  |  사용일: {item['used_at']}"
         st.caption(meta)
 
-        if content_type == "reddit_meme" and item.get("image_url"):
+        if item.get("image_url"):
             col_img, col_fields = st.columns([1, 3])
             with col_img:
                 st.markdown(
@@ -578,6 +637,7 @@ def render_card(item: dict) -> None:
 
         st.divider()
         render_action_buttons(item)
+        render_image_regenerate_expander(item)
         render_reanalyze_expander(item)
 
 
