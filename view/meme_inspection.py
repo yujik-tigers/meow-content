@@ -221,10 +221,10 @@ def generate_image(base_url: str, content_id: int, content_type: str) -> dict:
     return resp.json().get("content", {})
 
 
-def regenerate_image(base_url: str, content_id: int, prompt: str) -> dict:
+def regenerate_image(base_url: str, content_id: int, content_type: str, prompt: str) -> dict:
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/image/regenerate",
-        params={"prompt": prompt},
+        params={"content_type": content_type, "prompt": prompt},
         timeout=60,
     )
     resp.raise_for_status()
@@ -486,7 +486,7 @@ def render_image_regenerate_expander(item: dict) -> None:
                 disabled=not prompt,
             ):
                 try:
-                    regenerate_image(base_url, content_id, prompt)
+                    regenerate_image(base_url, content_id, content_type, prompt)
                     st.session_state.last_error = None
                     fetch_contents.clear()
                     st.rerun()
