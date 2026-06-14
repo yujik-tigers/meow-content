@@ -1,12 +1,17 @@
+import base64
 import logging
 from abc import ABC, abstractmethod
+from io import BytesIO
 from typing import override
 
 from google import genai
 from google.genai import types
+from openai import OpenAI
+from openai.types import ImagesResponse
+from PIL import Image as PILImage
 from PIL.Image import Image
 
-from app.enums import NanoBananaModel
+from app.enums import GptImageModel, NanoBananaModel
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +25,7 @@ class DiffusionModel(ABC):
     ) -> Image: ...
 
     @abstractmethod
-    async def recreate_image(
-        self,
-        previous_image: Image,
-        prompt: str,
-    ) -> Image: ...
+    async def reinforce_image(self, prompt: str, previous_image: Image) -> Image: ...
 
 
 class NanoBanana(DiffusionModel):
@@ -46,27 +47,14 @@ class NanoBanana(DiffusionModel):
         return self._parse_image_from_response(response)
 
     @override
-    async def recreate_image(
+    async def reinforce_image(
         self,
-        previous_image: Image,
         prompt: str,
+        previous_image: Image,
     ) -> Image:
-        system_prompt = (
-            "You are an image editing assistant. "
-            "The user will provide an existing image and a description of the changes they want. "
-            "Edit the image according to the instructions while preserving its overall composition and style. "
-            "Return only the edited image."
-        )
-
         response = self._client.models.generate_content(
             model=self._model_name.value,
-            contents=[
-                previous_image,
-                prompt,
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-            ),
+            contents=[previous_image, prompt],
         )
 
         return self._parse_image_from_response(response)
@@ -86,3 +74,44 @@ class NanoBanana(DiffusionModel):
             raise ValueError("No image data received from the model.")
 
         return image._pil_image
+
+
+class GptImage2(DiffusionModel):
+
+    def __init__(self, model_name: GptImageModel) -> None:
+        self._model_name = model_name
+        self._client = OpenAI()
+
+    @override
+    async def create_image(
+        self,
+        prompt: str,
+    ) -> Image:
+        result = self._client.images.generate(
+            model=self._model_name.value, prompt=prompt
+        )
+
+        return self._parse_image_from_response(result)
+
+    @override
+    async def reinforce_image(
+        self,
+        prompt: str,
+        previous_image: Image,
+    ) -> Image:
+        buffer = BytesIO()
+        previous_image.save(buffer, format=previous_image.format)
+        buffer.seek(0)
+
+        result = self._client.images.edit(
+            model=self._model_name.value,
+            image=buffer,
+            prompt=prompt,
+        )
+        return self._parse_image_from_response(result)
+
+    def _parse_image_from_response(self, response: ImagesResponse) -> Image:
+        if not response.data or not response.data[0].b64_json:
+            raise ValueError("No image data received from the model.")
+
+        return PILImage.open(BytesIO(base64.b64decode(response.data[0].b64_json)))

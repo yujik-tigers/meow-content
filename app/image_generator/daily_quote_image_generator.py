@@ -2,10 +2,10 @@ from dataclasses import replace
 from datetime import date, datetime
 from typing import override
 
-from app.enums import ContentStatus, NanoBananaModel
+from app.enums import ContentStatus, RegenerateType
 from app.image_generator import image_text_renderer
 from app.image_generator.base import ImageGenerator
-from app.image_generator.diffusion_model import DiffusionModel, NanoBanana
+from app.image_generator.diffusion_model import DiffusionModel
 from app.image_generator.s3_uploader import S3Client
 from app.schema.content import Content
 
@@ -49,12 +49,36 @@ No text in the image."""
         )
 
     @override
-    async def regenerate(self, content: Content, prompt: str) -> Content:
-        assert (
-            content.image_url is not None
-        ), "Content must have an existing image URL for regeneration"
-        image = await self._s3_client.download_image(content.image_url)
-        new_image = await self._model.recreate_image(image, prompt)
+    async def regenerate(
+        self, content: Content, prompt: str, regenerate_type: RegenerateType
+    ) -> Content:
+        if regenerate_type == RegenerateType.NEW:
+            image_generate_prompt = f"""
+Create an image of a cat that based on this quote and user feedback.
+Return only the edited image.
+
+# Quote
+{content.content}
+
+# User Feedback
+{prompt}
+"""
+            new_image = await self._model.create_image(image_generate_prompt)
+        else:
+            assert (
+                content.image_url is not None
+            ), "Content must have an existing image URL for regeneration"
+            image = await self._s3_client.download_image(content.image_url)
+            image_generate_prompt = f"""
+You are an image editing assistant. 
+The user will provide an existing image and a description of the changes they want. 
+Edit the image according to the instructions while preserving its overall composition and style. 
+Return only the edited image.
+
+# User Feedback
+{prompt}
+    """
+            new_image = await self._model.reinforce_image(image_generate_prompt, image)
 
         assert (
             content.content is not None and content.author is not None
@@ -75,8 +99,3 @@ No text in the image."""
             image_url=image_url,
             status=ContentStatus.PENDING,
         )
-
-
-daily_quote_image_generator = DailyQuoteImageGenerator(
-    NanoBanana(NanoBananaModel.NANO_BANANA_2), S3Client()
-)

@@ -17,6 +17,13 @@ LOCKOUT_SECONDS = 60
 
 ALL_CONTENT_TYPES = ["reddit_meme", "quote", "literal_quote", "fact"]
 ALL_STATUSES = ["raw", "analyzed", "pending", "approved", "rejected", "used"]
+ALL_MODELS = [
+    "gpt-image-2-2026-04-21",
+    "gemini-3.1-flash-image",
+    "gemini-3-pro-image",
+]
+ALL_REGENERATE_TYPES = ["modify", "new"]
+REGENERATE_TYPE_LABELS = {"modify": "modify (이전 이미지 기반)", "new": "new (새로 생성)"}
 STATUS_COLORS = {
     "raw": "gray",
     "analyzed": "violet",
@@ -178,7 +185,7 @@ def fetch_contents(
 def analyze_content(base_url: str, content_id: int, content_type: str) -> dict:
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/analyze",
-        params={"content_type": content_type},
+        json=content_type,
         timeout=60,
     )
     resp.raise_for_status()
@@ -204,27 +211,38 @@ def reanalyze_fields(
 ) -> None:
     resp = requests.patch(
         f"{base_url}/api/v1/admin/contents/{content_id}",
-        params={"content_type": content_type},
-        json=fields,
+        json={"request": fields, "content_type": content_type},
         timeout=60,
     )
     resp.raise_for_status()
 
 
-def generate_image(base_url: str, content_id: int, content_type: str) -> dict:
+def generate_image(base_url: str, content_id: int, content_type: str, model: str) -> dict:
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/image",
-        params={"content_type": content_type},
+        json={"model": model, "content_type": content_type},
         timeout=60,
     )
     resp.raise_for_status()
     return resp.json().get("content", {})
 
 
-def regenerate_image(base_url: str, content_id: int, content_type: str, prompt: str) -> dict:
+def regenerate_image(
+    base_url: str,
+    content_id: int,
+    content_type: str,
+    model: str,
+    prompt: str,
+    regenerate_type: str,
+) -> dict:
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/image/regenerate",
-        params={"content_type": content_type, "prompt": prompt},
+        json={
+            "model": model,
+            "content_type": content_type,
+            "prompt": prompt,
+            "regenerate_type": regenerate_type,
+        },
         timeout=60,
     )
     resp.raise_for_status()
@@ -382,9 +400,8 @@ def render_action_buttons(item: dict) -> None:
             st.session_state.last_error = str(e)
         st.rerun()
 
-    col1, col2, *_ = st.columns(6)
-
     if status == "raw":
+        col1, col2, *_ = st.columns(6)
         with col1:
             if st.button(
                 "Analyze",
@@ -406,6 +423,12 @@ def render_action_buttons(item: dict) -> None:
                 do_status("rejected")
 
     elif status == "analyzed":
+        gen_model = st.selectbox(
+            "이미지 모델",
+            ALL_MODELS,
+            key=f"gen_model_{content_id}",
+        )
+        col1, col2, *_ = st.columns(6)
         with col1:
             if st.button(
                 "이미지 생성",
@@ -414,7 +437,7 @@ def render_action_buttons(item: dict) -> None:
                 use_container_width=True,
             ):
                 try:
-                    generate_image(base_url, content_id, content_type)
+                    generate_image(base_url, content_id, content_type, gen_model)
                     st.session_state.last_error = None
                     fetch_contents.clear()
                 except Exception as e:
@@ -427,6 +450,7 @@ def render_action_buttons(item: dict) -> None:
                 do_status("rejected")
 
     elif status == "pending":
+        col1, col2, *_ = st.columns(6)
         with col1:
             if st.button(
                 "Approve",
@@ -442,6 +466,7 @@ def render_action_buttons(item: dict) -> None:
                 do_status("rejected")
 
     elif status == "approved":
+        col1, col2, *_ = st.columns(6)
         with col1:
             if st.button(
                 "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
@@ -454,6 +479,7 @@ def render_action_buttons(item: dict) -> None:
                 do_status("rejected")
 
     elif status == "rejected":
+        col1, *_ = st.columns(6)
         with col1:
             if st.button(
                 "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
@@ -474,6 +500,20 @@ def render_image_regenerate_expander(item: dict) -> None:
         if is_reddit_meme:
             st.info("reddit_meme은 이미지 재생성을 지원하지 않습니다.")
         else:
+            col_model, col_type = st.columns(2)
+            with col_model:
+                regen_model = st.selectbox(
+                    "모델",
+                    ALL_MODELS,
+                    key=f"regen_model_{content_id}",
+                )
+            with col_type:
+                regen_type = st.selectbox(
+                    "재생성 타입",
+                    ALL_REGENERATE_TYPES,
+                    key=f"regen_type_{content_id}",
+                    format_func=lambda t: REGENERATE_TYPE_LABELS[t],
+                )
             prompt = st.text_input(
                 "재생성 프롬프트",
                 key=f"regen_prompt_{content_id}",
@@ -486,7 +526,9 @@ def render_image_regenerate_expander(item: dict) -> None:
                 disabled=not prompt,
             ):
                 try:
-                    regenerate_image(base_url, content_id, content_type, prompt)
+                    regenerate_image(
+                        base_url, content_id, content_type, regen_model, prompt, regen_type
+                    )
                     st.session_state.last_error = None
                     fetch_contents.clear()
                     st.rerun()

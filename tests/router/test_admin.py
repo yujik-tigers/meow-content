@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 from httpx import AsyncClient
 
-from app.enums import ContentStatus
+from app.enums import ContentStatus, RegenerateType
 from app.exceptions import ContentNotFoundError
 from app.schema.content import ReanalyzeContentField
 
@@ -25,7 +25,10 @@ async def test_generate_image_for_content(
     mock_repository.get_content_by.return_value = content
     mock_image_generator.generate.return_value = generated
 
-    response = await client.post(f"/api/v1/admin/contents/{content_id}/image")
+    response = await client.post(
+        f"/api/v1/admin/contents/{content_id}/image",
+        json={"model": "gpt-image-2-2026-04-21", "content_type": "quote"},
+    )
 
     assert response.status_code == 200
     mock_repository.get_content_by.assert_called_once_with(content_id)
@@ -38,7 +41,10 @@ async def test_generate_image_content_not_found(
 ) -> None:
     mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
 
-    response = await client.post("/api/v1/admin/contents/999/image")
+    response = await client.post(
+        "/api/v1/admin/contents/999/image",
+        json={"model": "gpt-image-2-2026-04-21", "content_type": "quote"},
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Content not found: 999"
@@ -64,12 +70,19 @@ async def test_regenerate_image_for_content(
 
     response = await client.post(
         f"/api/v1/admin/contents/{content_id}/image/regenerate",
-        params={"prompt": prompt},
+        json={
+            "prompt": prompt,
+            "regenerate_type": "modify",
+            "content_type": "quote",
+            "model": "gpt-image-2-2026-04-21",
+        },
     )
 
     assert response.status_code == 200
     mock_repository.get_content_by.assert_called_once_with(content_id)
-    mock_image_generator.regenerate.assert_called_once_with(content, prompt)
+    mock_image_generator.regenerate.assert_called_once_with(
+        content, prompt, RegenerateType.MODIFY
+    )
     mock_repository.update_content.assert_called_once_with(regenerated)
 
 
@@ -80,7 +93,12 @@ async def test_regenerate_image_content_not_found(
 
     response = await client.post(
         "/api/v1/admin/contents/999/image/regenerate",
-        params={"prompt": "test"},
+        json={
+            "prompt": "test",
+            "regenerate_type": "modify",
+            "content_type": "quote",
+            "model": "gpt-image-2-2026-04-21",
+        },
     )
 
     assert response.status_code == 404
@@ -129,7 +147,11 @@ async def test_analyze_content(
     mock_repository.get_content_by.return_value = raw_content
     mock_analyzer.analyze_raw_content.return_value = analyzed_content
 
-    response = await client.post(f"/api/v1/admin/contents/{content_id}/analyze")
+    response = await client.post(
+        f"/api/v1/admin/contents/{content_id}/analyze",
+        content=b'"quote"',
+        headers={"Content-Type": "application/json"},
+    )
 
     assert response.status_code == 200
 
@@ -143,7 +165,11 @@ async def test_analyze_content_not_found(
 ) -> None:
     mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
 
-    response = await client.post("/api/v1/admin/contents/999/analyze")
+    response = await client.post(
+        "/api/v1/admin/contents/999/analyze",
+        content=b'"quote"',
+        headers={"Content-Type": "application/json"},
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Content not found: 999"
@@ -192,7 +218,10 @@ async def test_reanalyze_fields(
 
     response = await client.patch(
         f"/api/v1/admin/contents/{content_id}",
-        json=[dataclasses.asdict(item) for item in request],
+        json={
+            "request": [dataclasses.asdict(item) for item in request],
+            "content_type": "quote",
+        },
     )
 
     assert response.status_code == 204
@@ -208,7 +237,10 @@ async def test_reanalyze_fields_not_found(
 
     response = await client.patch(
         "/api/v1/admin/contents/999",
-        json=[{"field_name": "content_translation", "prompt_guide": ""}],
+        json={
+            "request": [{"field_name": "content_translation", "prompt_guide": ""}],
+            "content_type": "quote",
+        },
     )
 
     assert response.status_code == 404

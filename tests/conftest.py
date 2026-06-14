@@ -84,18 +84,24 @@ def mock_image_generator() -> AsyncMock:
 
 @pytest.fixture
 async def client(mock_repository, mock_analyzer, mock_image_generator):
-    from app.dependencies import inject_analyzer, inject_image_generator, inject_repository
+    from app.dependencies import inject_repository
     from app.main import app
 
     app.dependency_overrides[inject_repository] = lambda: mock_repository
-    app.dependency_overrides[inject_analyzer] = lambda: mock_analyzer
-    app.dependency_overrides[inject_image_generator] = lambda: mock_image_generator
 
     with (
         patch("app.main.create_tables", new=AsyncMock()),
         patch(
             "app.main.create_scheduler",
             return_value=MagicMock(start=MagicMock(), shutdown=MagicMock()),
+        ),
+        patch(
+            "app.router.admin.ImageGeneratorFactory.get_image_generator",
+            return_value=mock_image_generator,
+        ),
+        patch(
+            "app.router.admin.AnalyzerFactory.get_analyzer",
+            return_value=mock_analyzer,
         ),
     ):
         async with AsyncClient(

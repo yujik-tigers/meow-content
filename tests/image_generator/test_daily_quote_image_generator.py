@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from PIL import Image as PILModule
 
-from app.enums import ContentStatus, ContentType
+from app.enums import ContentStatus, ContentType, RegenerateType
 from app.image_generator.daily_quote_image_generator import DailyQuoteImageGenerator
 from app.image_generator.diffusion_model import DiffusionModel
 from app.image_generator.s3_uploader import S3Client
@@ -75,7 +75,7 @@ async def test_regenerate_updates_image_url_and_status(
     generator, mock_model, mock_s3, quote_content, pil_image, mocker
 ):
     mock_s3.download_image.return_value = pil_image
-    mock_model.recreate_image.return_value = pil_image
+    mock_model.reinforce_image.return_value = pil_image
     mocker.patch(
         "app.image_generator.daily_quote_image_generator.image_text_renderer.add_text",
         return_value=pil_image,
@@ -85,7 +85,7 @@ async def test_regenerate_updates_image_url_and_status(
     mock_datetime = mocker.patch("app.image_generator.daily_quote_image_generator.datetime")
     mock_datetime.now.return_value.strftime.return_value = TEST_TIMESTAMP
 
-    result = await generator.regenerate(quote_content, "make it darker")
+    result = await generator.regenerate(quote_content, "make it darker", RegenerateType.MODIFY)
 
     expected_url = f"{BUCKET_BASE}/daily_quote/{TEST_DATE}/{quote_content.id}/edited/{TEST_TIMESTAMP}.png"
     assert result == replace(quote_content, image_url=expected_url, status=ContentStatus.PENDING)

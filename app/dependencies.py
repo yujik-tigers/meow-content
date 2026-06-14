@@ -5,11 +5,6 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.analyzer.base import ContentAnalyzer
-from app.analyzer.daily_quote_analyzer import daily_quote_analyzer
-from app.analyzer.meme_analyzer import reddit_meme_analyzer
-from app.enums import ContentType
-from app.image_generator.daily_quote_image_generator import daily_quote_image_generator
 from app.repository.base import ContentRepository
 from app.repository.mysql.engine import AsyncSessionLocal
 from app.repository.mysql.repository import MySQLContentRepository
@@ -30,19 +25,3 @@ async def inject_repository(
     session: Annotated[AsyncSession, Depends(inject_db_session)],
 ) -> ContentRepository:
     return MySQLContentRepository(session)
-
-
-async def inject_analyzer(content_type: ContentType) -> ContentAnalyzer:
-    if content_type == ContentType.REDDIT_MEME:
-        return reddit_meme_analyzer
-    if content_type == ContentType.QUOTE:
-        return daily_quote_analyzer
-
-    raise ValueError(f"Unsupported content type to analyze: {content_type}")
-
-
-async def inject_image_generator(content_type: ContentType):
-    if content_type == ContentType.QUOTE:
-        return daily_quote_image_generator
-
-    raise ValueError(f"Unsupported content type to generate image: {content_type}")

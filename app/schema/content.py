@@ -1,7 +1,14 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from app.enums import ContentStatus, ContentType, LiteralType
+from app.enums import (
+    ContentStatus,
+    ContentType,
+    GptImageModel,
+    LiteralType,
+    NanoBananaModel,
+    RegenerateType,
+)
 
 
 @dataclass(frozen=True)
@@ -44,3 +51,17 @@ class Content:
 class ReanalyzeContentField:
     field_name: str
     prompt_guide: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class GenerateImageRequest:
+    model: GptImageModel | NanoBananaModel
+    content_type: ContentType
+
+
+@dataclass(frozen=True, kw_only=True)
+class RegenerateImageRequest:
+    prompt: str
+    regenerate_type: RegenerateType
+    content_type: ContentType
+    model: GptImageModel | NanoBananaModel

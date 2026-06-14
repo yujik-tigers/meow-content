@@ -30,3 +30,12 @@ class ContentType(StrEnum):
 class NanoBananaModel(StrEnum):
     NANO_BANANA_2 = "gemini-3.1-flash-image"
     NANO_BANANA_PRO = "gemini-3-pro-image"
+
+
+class GptImageModel(StrEnum):
+    GPT_IMAGE_2 = "gpt-image-2-2026-04-21"
+
+
+class RegenerateType(StrEnum):
+    MODIFY = "modify"
+    NEW = "new"
