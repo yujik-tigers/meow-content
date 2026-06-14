@@ -76,6 +76,13 @@ class NanoBanana(DiffusionModel):
         return image._pil_image
 
 
+_FORMAT_MIME: dict[str, tuple[str, str]] = {
+    "PNG": ("image.png", "image/png"),
+    "JPEG": ("image.jpg", "image/jpeg"),
+    "WEBP": ("image.webp", "image/webp"),
+}
+
+
 class GptImage2(DiffusionModel):
 
     def __init__(self, model_name: GptImageModel) -> None:
@@ -99,13 +106,16 @@ class GptImage2(DiffusionModel):
         prompt: str,
         previous_image: Image,
     ) -> Image:
+        fmt = previous_image.format
+        assert fmt is not None, "Image must have a format"
+        filename, mime = _FORMAT_MIME[fmt]
         buffer = BytesIO()
-        previous_image.save(buffer, format=previous_image.format)
+        previous_image.save(buffer, format=fmt)
         buffer.seek(0)
 
         result = self._client.images.edit(
             model=self._model_name.value,
-            image=buffer,
+            image=(filename, buffer, mime),
             prompt=prompt,
         )
         return self._parse_image_from_response(result)
