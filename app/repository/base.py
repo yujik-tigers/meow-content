@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 
 from app.enums import ContentStatus, ContentType
 from app.schema.content import Content
+from app.schema.usage import UsageAggregate
 
 
 class ContentRepository(ABC):
@@ -26,3 +27,14 @@ class ContentRepository(ABC):
 
     @abstractmethod
     async def reserve_daily_content(self, used_at: date) -> Content: ...
+
+
+class TokenUsageRepository(ABC):
+
+    @abstractmethod
+    async def record(self, model: str, input_tokens: int, output_tokens: int) -> None: ...
+
+    @abstractmethod
+    async def aggregate_by(
+        self, start: datetime, end: datetime
+    ) -> list[UsageAggregate]: ...

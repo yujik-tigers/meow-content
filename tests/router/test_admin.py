@@ -1,11 +1,13 @@
 import dataclasses
 from unittest.mock import AsyncMock
 
+import pytest
 from httpx import AsyncClient
 
 from app.enums import ContentStatus, RegenerateType
 from app.exceptions import ContentNotFoundError
 from app.schema.content import ReanalyzeContentField
+from app.schema.usage import UsageAggregate
 
 
 async def test_generate_image_for_content(
@@ -173,6 +175,71 @@ async def test_analyze_content_not_found(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Content not found: 999"
+
+
+async def test_get_usage_cost(
+    client: AsyncClient, mock_usage_repository: AsyncMock
+) -> None:
+    mock_usage_repository.aggregate_by.return_value = [
+        UsageAggregate(
+            period="2026-06-15",
+            model="gpt-5.2",
+            request_count=3,
+            input_tokens_sum=1000,
+            output_tokens_sum=500,
+        ),
+        UsageAggregate(
+            period="2026-06-15",
+            model="unknown-model",
+            request_count=1,
+            input_tokens_sum=10,
+            output_tokens_sum=10,
+        ),
+    ]
+
+    response = await client.get(
+        "/api/v1/admin/usage/cost",
+        params={
+            "start": "2026-06-01T00:00:00",
+            "end": "2026-07-01T00:00:00",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()["content"]
+    assert len(body) == 2
+    assert body[0]["model"] == "gpt-5.2"
+    assert body[0]["cost"] is not None
+    assert body[1]["model"] == "unknown-model"
+    assert body[1]["cost"] is None
+
+
+async def test_get_usage_cost_applies_free_tier(
+    client: AsyncClient, mock_usage_repository: AsyncMock
+) -> None:
+    mock_usage_repository.aggregate_by.return_value = [
+        UsageAggregate(
+            period="2026-06-15",
+            model="gpt-5.2",
+            request_count=1,
+            input_tokens_sum=1_000_000,
+            output_tokens_sum=0,
+        ),
+    ]
+
+    response = await client.get(
+        "/api/v1/admin/usage/cost",
+        params={
+            "start": "2026-06-15T00:00:00",
+            "end": "2026-06-16T00:00:00",
+            "apply_free_tier": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()["content"]
+    # billable = 1_000_000 - 250_000 (daily free tier) = 750_000
+    assert body[0]["cost"] == pytest.approx(750_000 * 1.75 / 1_000_000)
 
 
 async def test_update_status_valid(

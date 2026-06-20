@@ -28,7 +28,7 @@ from httpx import ASGITransport, AsyncClient
 from app.analyzer.base import ContentAnalyzer
 from app.enums import ContentStatus, ContentType
 from app.image_generator.base import ImageGenerator
-from app.repository.base import ContentRepository
+from app.repository.base import ContentRepository, TokenUsageRepository
 from app.schema.content import Content
 
 
@@ -83,11 +83,19 @@ def mock_image_generator() -> AsyncMock:
 
 
 @pytest.fixture
-async def client(mock_repository, mock_analyzer, mock_image_generator):
-    from app.dependencies import inject_repository
+def mock_usage_repository() -> AsyncMock:
+    return AsyncMock(spec=TokenUsageRepository)
+
+
+@pytest.fixture
+async def client(
+    mock_repository, mock_analyzer, mock_image_generator, mock_usage_repository
+):
+    from app.dependencies import inject_repository, inject_usage_repository
     from app.main import app
 
     app.dependency_overrides[inject_repository] = lambda: mock_repository
+    app.dependency_overrides[inject_usage_repository] = lambda: mock_usage_repository
 
     with (
         patch("app.main.create_tables", new=AsyncMock()),

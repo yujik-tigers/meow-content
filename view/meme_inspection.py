@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+from datetime import date, datetime, timedelta
 
 import requests
 import streamlit as st
@@ -249,6 +250,25 @@ def regenerate_image(
     return resp.json().get("content", {})
 
 
+def fetch_usage_summary(
+    base_url: str,
+    start: datetime,
+    end: datetime,
+    apply_free_tier: bool,
+) -> list[dict]:
+    resp = requests.get(
+        f"{base_url}/api/v1/admin/usage/cost",
+        params={
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "apply_free_tier": apply_free_tier,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get("content", [])
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 
@@ -286,6 +306,72 @@ def render_sidebar() -> None:
         st.select_slider(
             "Page Size", options=[10, 20, 50], key="page_size", on_change=_reset_page
         )
+
+
+# ── Usage / Cost summary ────────────────────────────────────────────────────────
+
+
+def render_usage_summary() -> None:
+    today = date.today()
+    default_start = today.replace(day=1)
+
+    col_start, col_end = st.columns([1, 1])
+    with col_start:
+        start_date = st.date_input("시작일", value=default_start, key="usage_start")
+    with col_end:
+        end_date = st.date_input("종료일", value=today, key="usage_end")
+
+    apply_free_tier = st.checkbox(
+        "gpt-5.2 무료 티어 차감 (일 250,000 토큰)", key="usage_apply_free_tier"
+    )
+
+    if start_date > end_date:
+        st.error("시작일은 종료일보다 이전이어야 합니다.")
+        return
+
+    start = datetime.combine(start_date, datetime.min.time())
+    end = datetime.combine(end_date, datetime.min.time()) + timedelta(days=1)
+
+    try:
+        summaries = fetch_usage_summary(
+            st.session_state.base_url, start, end, apply_free_tier
+        )
+    except requests.exceptions.ConnectionError:
+        st.error(f"API 서버에 연결할 수 없습니다: {st.session_state.base_url}")
+        return
+    except Exception as e:
+        st.error(f"사용량 조회 실패: {e}")
+        return
+
+    if not summaries:
+        st.info("해당 기간에 사용 내역이 없습니다.")
+        return
+
+    total_cost = sum(s["cost"] for s in summaries if s.get("cost") is not None)
+    missing_pricing = sorted({s["model"] for s in summaries if s.get("cost") is None})
+
+    st.metric("총 비용 (USD)", f"${total_cost:,.4f}")
+    if missing_pricing:
+        st.caption(f"가격 정보 없음: {', '.join(missing_pricing)} (비용 미포함)")
+
+    st.dataframe(
+        summaries,
+        column_order=[
+            "period",
+            "model",
+            "request_count",
+            "input_tokens_sum",
+            "output_tokens_sum",
+            "cost",
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def render_usage_page() -> None:
+    st.title("토큰 사용량 / 비용")
+    render_usage_summary()
 
 
 # ── Bulk Actions ──────────────────────────────────────────────────────────────
@@ -686,11 +772,7 @@ def render_card(item: dict) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-def main() -> None:
-    st.set_page_config(page_title="Meow Content Dashboard", layout="wide")
-    if not require_auth():
-        return
-    init_state()
+def render_content_page() -> None:
     render_sidebar()
 
     st.title("Meow Content Dashboard")
@@ -729,6 +811,21 @@ def main() -> None:
     selected_ids = _get_selected_ids(items)
     render_pagination(st.session_state.page_index, is_last_page, position="bottom")
     render_bulk_actions(items, selected_ids)
+
+
+def main() -> None:
+    st.set_page_config(page_title="Meow Content Dashboard", layout="wide")
+    if not require_auth():
+        return
+    init_state()
+
+    pg = st.navigation(
+        [
+            st.Page(render_content_page, title="콘텐츠", url_path="contents", default=True),
+            st.Page(render_usage_page, title="토큰 사용량", url_path="usage"),
+        ]
+    )
+    pg.run()
 
 
 if __name__ == "__main__":

@@ -52,6 +52,18 @@ class ContentRecord(SQLModel, table=True):
         )
 
 
+class TokenUsageRecord(SQLModel, table=True):
+    __tablename__ = "token_usage"  # pyright: ignore[reportAssignmentType]
+
+    id: int | None = Field(default=None, primary_key=True)
+    model: str = Field(max_length=100)
+    input_tokens: int
+    output_tokens: int
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(ZoneInfo("Asia/Seoul"))
+    )
+
+
 class RedditMeme:
     def __new__(
         cls, image_url: str, author: str, title: str, **kwargs
