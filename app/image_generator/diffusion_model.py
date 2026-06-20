@@ -4,19 +4,23 @@ from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import override
 
-from google import genai
-from google.genai import types
-from openai import OpenAI
-from openai.types import ImagesResponse
+from langchain.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from PIL import Image as PILImage
 from PIL.Image import Image
 
-from app.enums import GptImageModel, NanoBananaModel
+from app.enums import NanoBananaModel
 
 logger = logging.getLogger(__name__)
 
 
 class DiffusionModel(ABC):
+
+    _REINFORCE_SYSTEM_PROMPT = (
+        "You are an image editing assistant. Edit the provided image according to "
+        "the user's instructions and return only the edited image."
+    )
 
     @abstractmethod
     async def create_image(
@@ -27,24 +31,44 @@ class DiffusionModel(ABC):
     @abstractmethod
     async def reinforce_image(self, prompt: str, previous_image: Image) -> Image: ...
 
+    def _image_to_base64(self, image: Image) -> tuple[str, str]:
+        fmt = image.format
+        assert fmt is not None, "Image must have a format"
+
+        if fmt == "PNG":
+            mime = "image/png"
+        elif fmt == "JPEG":
+            mime = "image/jpeg"
+        else:
+            raise ValueError(f"Unsupported image format: {fmt}")
+
+        buffer = BytesIO()
+        image.save(buffer, format=fmt)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8"), mime
+
+    def _parse_image_from_response(self, response: AIMessage) -> Image:
+        image = next(
+            (item for item in response.content_blocks if item["type"] == "image"), None
+        )
+        image_base64 = image.get("base64") if image is not None else None
+        if image_base64 is None:
+            raise ValueError("No image data received from the model.")
+
+        return PILImage.open(BytesIO(base64.b64decode(image_base64)))
+
 
 class NanoBanana(DiffusionModel):
 
     def __init__(self, model_name: NanoBananaModel) -> None:
-        self._model_name = model_name
-        self._client = genai.Client()
+        self._llm = ChatGoogleGenerativeAI(model=model_name.value)
 
     @override
     async def create_image(
         self,
         prompt: str,
     ) -> Image:
-        response = self._client.models.generate_content(
-            model=self._model_name.value,
-            contents=[prompt],
-        )
-
-        return self._parse_image_from_response(response)
+        result = await self._llm.ainvoke(prompt)
+        return self._parse_image_from_response(result)
 
     @override
     async def reinforce_image(
@@ -52,51 +76,39 @@ class NanoBanana(DiffusionModel):
         prompt: str,
         previous_image: Image,
     ) -> Image:
-        response = self._client.models.generate_content(
-            model=self._model_name.value,
-            contents=[previous_image, prompt],
+        image_base64, mime = self._image_to_base64(previous_image)
+        result = await self._llm.ainvoke(
+            [
+                SystemMessage(self._REINFORCE_SYSTEM_PROMPT),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image",
+                            "base64": image_base64,
+                            "mime_type": mime,
+                        },
+                    ]
+                ),
+            ]
         )
 
-        return self._parse_image_from_response(response)
-
-    def _parse_image_from_response(
-        self, response: types.GenerateContentResponse
-    ) -> Image:
-        image = None
-
-        for part in response.parts or []:
-            if part.text is not None:
-                logging.info(f"Received text part: {part.text}")
-            elif part.inline_data is not None:
-                image = part.as_image()
-
-        if image is None or image._pil_image is None:
-            raise ValueError("No image data received from the model.")
-
-        return image._pil_image
-
-
-_FORMAT_MIME: dict[str, tuple[str, str]] = {
-    "PNG": ("image.png", "image/png"),
-    "JPEG": ("image.jpg", "image/jpeg"),
-    "WEBP": ("image.webp", "image/webp"),
-}
+        return self._parse_image_from_response(result)
 
 
 class GptImage2(DiffusionModel):
 
-    def __init__(self, model_name: GptImageModel) -> None:
-        self._model_name = model_name
-        self._client = OpenAI()
+    def __init__(self) -> None:
+        self._llm = ChatOpenAI(model="gpt-5.2").bind_tools(
+            [{"type": "image_generation", "model": "gpt-image-2"}]
+        )
 
     @override
     async def create_image(
         self,
         prompt: str,
     ) -> Image:
-        result = self._client.images.generate(
-            model=self._model_name.value, prompt=prompt
-        )
+        result = await self._llm.ainvoke(prompt)
 
         return self._parse_image_from_response(result)
 
@@ -106,22 +118,22 @@ class GptImage2(DiffusionModel):
         prompt: str,
         previous_image: Image,
     ) -> Image:
-        fmt = previous_image.format
-        assert fmt is not None, "Image must have a format"
-        filename, mime = _FORMAT_MIME[fmt]
-        buffer = BytesIO()
-        previous_image.save(buffer, format=fmt)
-        buffer.seek(0)
+        image_base64, mime = self._image_to_base64(previous_image)
 
-        result = self._client.images.edit(
-            model=self._model_name.value,
-            image=(filename, buffer, mime),
-            prompt=prompt,
+        result = await self._llm.ainvoke(
+            [
+                SystemMessage(self._REINFORCE_SYSTEM_PROMPT),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image",
+                            "base64": image_base64,
+                            "mime_type": mime,
+                        },
+                    ]
+                ),
+            ]
         )
+
         return self._parse_image_from_response(result)
-
-    def _parse_image_from_response(self, response: ImagesResponse) -> Image:
-        if not response.data or not response.data[0].b64_json:
-            raise ValueError("No image data received from the model.")
-
-        return PILImage.open(BytesIO(base64.b64decode(response.data[0].b64_json)))
