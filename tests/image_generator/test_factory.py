@@ -9,7 +9,7 @@ from app.image_generator.factory import ImageGeneratorFactory
 @pytest.fixture(autouse=True)
 def mock_clients(mocker):
     mocker.patch("app.image_generator.diffusion_model.ChatGoogleGenerativeAI")
-    mocker.patch("app.image_generator.diffusion_model.ChatOpenAI")
+    mocker.patch("app.image_generator.diffusion_model.AsyncOpenAI")
     mocker.patch("app.image_generator.factory.S3Client")
 
 

@@ -13,7 +13,7 @@ class ImageGeneratorFactory:
         if isinstance(diffusion_model, NanoBananaModel):
             model = NanoBanana(diffusion_model)
         else:
-            model = GptImage2()
+            model = GptImage2(diffusion_model)
 
         if content_type == ContentType.QUOTE:
             return DailyQuoteImageGenerator(model=model, s3_client=S3Client())
