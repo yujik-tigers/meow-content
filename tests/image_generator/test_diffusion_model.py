@@ -29,9 +29,10 @@ def _make_image_response(mime_type: str = "image/png") -> AIMessage:
     )
 
 
-def _make_images_response(b64_json: str | None) -> MagicMock:
+def _make_images_response(b64_json: str | None, usage: MagicMock | None = None) -> MagicMock:
     response = MagicMock()
     response.data = [MagicMock(b64_json=b64_json)] if b64_json is not None else []
+    response.usage = usage
     return response
 
 
@@ -170,3 +171,27 @@ def test_images_response_to_ai_message_raises_when_no_image_data(gpt_image2_chat
         gpt_image2_chat_model._images_response_to_ai_message(
             _make_images_response(None)
         )
+
+
+def test_images_response_to_ai_message_sets_usage_metadata(gpt_image2_chat_model):
+    usage = MagicMock(input_tokens=10, output_tokens=20, total_tokens=30)
+
+    message = gpt_image2_chat_model._images_response_to_ai_message(
+        _make_images_response(_make_image_base64(), usage=usage)
+    )
+
+    assert message.usage_metadata == {
+        "input_tokens": 10,
+        "output_tokens": 20,
+        "total_tokens": 30,
+    }
+
+
+def test_images_response_to_ai_message_omits_usage_metadata_when_absent(
+    gpt_image2_chat_model,
+):
+    message = gpt_image2_chat_model._images_response_to_ai_message(
+        _make_images_response(_make_image_base64())
+    )
+
+    assert message.usage_metadata is None

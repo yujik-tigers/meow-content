@@ -11,6 +11,7 @@ from langchain_core.callbacks.manager import (
 )
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
+from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_google_genai import ChatGoogleGenerativeAI
 from openai import AsyncOpenAI
@@ -233,6 +234,14 @@ class _GptImage2ChatModel(BaseChatModel):
         if not response.data or not response.data[0].b64_json:
             raise ValueError("No image data received from the model.")
 
+        usage_metadata = None
+        if response.usage is not None:
+            usage_metadata = UsageMetadata(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                total_tokens=response.usage.total_tokens,
+            )
+
         return AIMessage(
             content=[
                 {
@@ -241,5 +250,6 @@ class _GptImage2ChatModel(BaseChatModel):
                     "mime_type": "image/png",
                 }
             ],
-            response_metadata={"output_version": "v1"},
+            response_metadata={"output_version": "v1", "model_name": self.model},
+            usage_metadata=usage_metadata,
         )
