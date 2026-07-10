@@ -19,6 +19,9 @@ COPY pyproject.toml poetry.lock* /code/
 
 RUN poetry install --no-root
 
+RUN playwright install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY ./app /code/app
 COPY ./view /code/view
 

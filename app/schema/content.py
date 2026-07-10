@@ -48,6 +48,15 @@ class Content:
 
 
 @dataclass(frozen=True, kw_only=True)
+class NewContent:
+    type: ContentType
+    content: str | None = None
+    image_url: str | None = None
+    author: str | None = None
+    title: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
 class ReanalyzeContentField:
     field_name: str
     prompt_guide: str

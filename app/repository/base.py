@@ -1,12 +1,16 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date, datetime
 
 from app.enums import ContentStatus, ContentType
-from app.schema.content import Content
+from app.schema.content import Content, NewContent
 from app.schema.usage import UsageAggregate
 
 
 class ContentRepository(ABC):
+
+    @abstractmethod
+    async def create_contents(self, contents: Sequence[NewContent]) -> int: ...
 
     @abstractmethod
     async def update_status(self, content_id: int, status: ContentStatus) -> None: ...
