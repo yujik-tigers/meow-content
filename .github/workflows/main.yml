@@ -37,6 +37,15 @@ jobs:
         oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
         tags: tag:ci
 
+    - name: Copy deploy compose file to homelab
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_TS_IP }}
+        username: deploy
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "docker-compose.app.yml"
+        target: "~/meow-content/"
+
     - name: Deploy to homelab via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -44,28 +53,14 @@ jobs:
         username: deploy
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          docker stop meow-content meow-streamlit || true
-          docker rm meow-content meow-streamlit || true
+          cd ~/meow-content
 
           echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.tmp
 
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} \
+            docker compose -f docker-compose.app.yml pull
 
-          docker run -d \
-            --name meow-content \
-            --network meow-network \
-            -v ~/meow-content/images:/code/app/images \
-            --env-file .env.tmp \
-            -e TZ=Asia/Seoul \
-            ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
-
-          docker run -d \
-            --name meow-streamlit \
-            --network meow-network \
-            --env-file .env.tmp \
-            -e TZ=Asia/Seoul \
-            -e API_BASE_URL=http://meow-content:8000 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest \
-            streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0 --server.baseUrlPath /admin
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} \
+            docker compose -f docker-compose.app.yml up -d
 
           rm -f .env.tmp

@@ -1,0 +1,31 @@
+# CI/CD가 push마다 재배포하는 앱 스택 (meow-content, meow-streamlit).
+# MySQL/Qdrant는 별도 docker-compose.infra.yml로 미리 떠 있어야 한다.
+
+services:
+  meow-content:
+    image: ${DOCKERHUB_USERNAME}/meow-content:latest
+    container_name: meow-content
+    restart: unless-stopped
+    env_file: .env.tmp
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - ~/meow-content/images:/code/app/images
+    networks:
+      - meow-network
+
+  meow-streamlit:
+    image: ${DOCKERHUB_USERNAME}/meow-content:latest
+    container_name: meow-streamlit
+    restart: unless-stopped
+    command: streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0 --server.baseUrlPath /admin
+    env_file: .env.tmp
+    environment:
+      - TZ=Asia/Seoul
+      - API_BASE_URL=http://meow-content:8000
+    networks:
+      - meow-network
+
+networks:
+  meow-network:
+    external: true
