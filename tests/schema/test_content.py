@@ -24,6 +24,7 @@ def make_req(
 def test_valid_transitions(
     from_status: ContentStatus, to_status: ContentStatus
 ) -> None:
+    """허용되는 상태 전이 요청은 검증을 통과한다."""
     req = make_req(from_status, to_status)
     assert req.from_status == from_status
     assert req.to_status == to_status
@@ -43,5 +44,6 @@ def test_valid_transitions(
 def test_invalid_transitions_raise(
     from_status: ContentStatus, to_status: ContentStatus
 ) -> None:
+    """금지된 상태 전이 요청은 검증 에러가 발생한다."""
     with pytest.raises(ValueError):
         make_req(from_status, to_status)

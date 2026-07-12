@@ -1,48 +1,56 @@
 import dataclasses
+from datetime import datetime
 from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 
-from app.enums import ContentStatus, RegenerateType
-from app.exceptions import ContentNotFoundError
+from app.enums import ContentStatus, ContentType, RegenerateType
+from app.repository.mysql._models import ContentRecord, TokenUsageRecord
 from app.schema.content import ReanalyzeContentField
-from app.schema.usage import UsageAggregate
+
+
+async def _seed_content(db_session, **kwargs) -> ContentRecord:
+    record = ContentRecord(**kwargs)
+    db_session.add(record)
+    await db_session.commit()
+    return record
 
 
 async def test_generate_image_for_content(
     client: AsyncClient,
-    mock_repository: AsyncMock,
+    db_session,
     mock_image_generator: AsyncMock,
     make_content,
 ) -> None:
-    content_id = 1
-    content = make_content(id=content_id, status=ContentStatus.ANALYZED)
-    generated = make_content(
-        id=content_id,
+    """이미지 생성 요청 시 생성기가 반환한 image_url·상태가 DB에 반영된다."""
+    record = await _seed_content(
+        db_session,
+        type=ContentType.QUOTE,
+        status=ContentStatus.ANALYZED,
+        content="quote",
+    )
+    mock_image_generator.generate.return_value = make_content(
+        id=record.id,
+        type=ContentType.QUOTE,
         status=ContentStatus.PENDING,
         image_url="https://s3.example.com/gen.jpg",
     )
 
-    mock_repository.get_content_by.return_value = content
-    mock_image_generator.generate.return_value = generated
-
     response = await client.post(
-        f"/api/v1/admin/contents/{content_id}/image",
+        f"/api/v1/admin/contents/{record.id}/image",
         json={"model": "gpt-image-2-2026-04-21", "content_type": "quote"},
     )
 
     assert response.status_code == 200
-    mock_repository.get_content_by.assert_called_once_with(content_id)
-    mock_image_generator.generate.assert_called_once_with(content)
-    mock_repository.update_content.assert_called_once_with(generated)
+    assert mock_image_generator.generate.call_args.args[0].id == record.id
+    await db_session.refresh(record)
+    assert record.image_url == "https://s3.example.com/gen.jpg"
+    assert record.status == ContentStatus.PENDING
 
 
-async def test_generate_image_content_not_found(
-    client: AsyncClient, mock_repository: AsyncMock
-) -> None:
-    mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
-
+async def test_generate_image_content_not_found(client: AsyncClient) -> None:
+    """존재하지 않는 콘텐츠의 이미지 생성 요청은 404를 반환한다."""
     response = await client.post(
         "/api/v1/admin/contents/999/image",
         json={"model": "gpt-image-2-2026-04-21", "content_type": "quote"},
@@ -54,24 +62,28 @@ async def test_generate_image_content_not_found(
 
 async def test_regenerate_image_for_content(
     client: AsyncClient,
-    mock_repository: AsyncMock,
+    db_session,
     mock_image_generator: AsyncMock,
     make_content,
 ) -> None:
-    content_id = 1
+    """이미지 재생성 요청 시 프롬프트가 생성기에 전달되고 결과가 DB에 반영된다."""
     prompt = "make it more vibrant"
-    content = make_content(id=content_id, status=ContentStatus.PENDING)
-    regenerated = make_content(
-        id=content_id,
+    record = await _seed_content(
+        db_session,
+        type=ContentType.QUOTE,
+        status=ContentStatus.PENDING,
+        content="quote",
+        image_url="https://s3.example.com/old.jpg",
+    )
+    mock_image_generator.regenerate.return_value = make_content(
+        id=record.id,
+        type=ContentType.QUOTE,
         status=ContentStatus.PENDING,
         image_url="https://s3.example.com/regen.jpg",
     )
 
-    mock_repository.get_content_by.return_value = content
-    mock_image_generator.regenerate.return_value = regenerated
-
     response = await client.post(
-        f"/api/v1/admin/contents/{content_id}/image/regenerate",
+        f"/api/v1/admin/contents/{record.id}/image/regenerate",
         json={
             "prompt": prompt,
             "regenerate_type": "modify",
@@ -81,18 +93,18 @@ async def test_regenerate_image_for_content(
     )
 
     assert response.status_code == 200
-    mock_repository.get_content_by.assert_called_once_with(content_id)
-    mock_image_generator.regenerate.assert_called_once_with(
-        content, prompt, RegenerateType.MODIFY
+    called_content, called_prompt, called_type = (
+        mock_image_generator.regenerate.call_args.args
     )
-    mock_repository.update_content.assert_called_once_with(regenerated)
+    assert called_content.id == record.id
+    assert called_prompt == prompt
+    assert called_type == RegenerateType.MODIFY
+    await db_session.refresh(record)
+    assert record.image_url == "https://s3.example.com/regen.jpg"
 
 
-async def test_regenerate_image_content_not_found(
-    client: AsyncClient, mock_repository: AsyncMock
-) -> None:
-    mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
-
+async def test_regenerate_image_content_not_found(client: AsyncClient) -> None:
+    """존재하지 않는 콘텐츠의 이미지 재생성 요청은 404를 반환한다."""
     response = await client.post(
         "/api/v1/admin/contents/999/image/regenerate",
         json={
@@ -107,11 +119,23 @@ async def test_regenerate_image_content_not_found(
     assert response.json()["detail"] == "Content not found: 999"
 
 
-async def test_list_contents(
-    client: AsyncClient, mock_repository: AsyncMock, make_content
-) -> None:
-    contents = [make_content(id=1), make_content(id=2)]
-    mock_repository.fetch_contents_by.return_value = contents
+async def test_list_contents(client: AsyncClient, db_session) -> None:
+    """상태·타입 필터에 맞는 콘텐츠 목록을 반환한다."""
+    await _seed_content(
+        db_session,
+        type=ContentType.REDDIT_MEME,
+        status=ContentStatus.RAW,
+        image_url="https://i.redd.it/cat1.jpg",
+    )
+    await _seed_content(
+        db_session,
+        type=ContentType.REDDIT_MEME,
+        status=ContentStatus.RAW,
+        image_url="https://i.redd.it/cat2.jpg",
+    )
+    await _seed_content(
+        db_session, type=ContentType.QUOTE, status=ContentStatus.RAW, content="q"
+    )
 
     response = await client.get(
         "/api/v1/admin/contents",
@@ -119,14 +143,16 @@ async def test_list_contents(
     )
 
     assert response.status_code == 200
-    assert len(response.json()["content"]) == 2
+    body = response.json()["content"]
+    assert len(body) == 2
+    assert {item["image_url"] for item in body} == {
+        "https://i.redd.it/cat1.jpg",
+        "https://i.redd.it/cat2.jpg",
+    }
 
 
-async def test_list_contents_empty(
-    client: AsyncClient, mock_repository: AsyncMock
-) -> None:
-    mock_repository.fetch_contents_by.return_value = []
-
+async def test_list_contents_empty(client: AsyncClient) -> None:
+    """조건에 맞는 콘텐츠가 없으면 빈 목록을 반환한다."""
     response = await client.get(
         "/api/v1/admin/contents",
         params={"content_status": "raw", "content_type": "reddit_meme"},
@@ -138,35 +164,40 @@ async def test_list_contents_empty(
 
 async def test_analyze_content(
     client: AsyncClient,
-    mock_repository: AsyncMock,
+    db_session,
     mock_analyzer: AsyncMock,
     make_content,
 ) -> None:
-    content_id = 1
-    raw_content = make_content(status=ContentStatus.RAW)
-    analyzed_content = make_content(status=ContentStatus.PENDING)
-
-    mock_repository.get_content_by.return_value = raw_content
-    mock_analyzer.analyze_raw_content.return_value = analyzed_content
+    """콘텐츠 분석 요청 시 분석 결과 필드가 DB에 반영된다."""
+    record = await _seed_content(
+        db_session,
+        type=ContentType.QUOTE,
+        status=ContentStatus.RAW,
+        content="Do or do not",
+    )
+    mock_analyzer.analyze_raw_content.return_value = make_content(
+        id=record.id,
+        type=ContentType.QUOTE,
+        status=ContentStatus.ANALYZED,
+        content="Do or do not",
+        content_translation="하거나 하지 않거나",
+    )
 
     response = await client.post(
-        f"/api/v1/admin/contents/{content_id}/analyze",
+        f"/api/v1/admin/contents/{record.id}/analyze",
         content=b'"quote"',
         headers={"Content-Type": "application/json"},
     )
 
     assert response.status_code == 200
+    assert mock_analyzer.analyze_raw_content.call_args.args[0].id == record.id
+    await db_session.refresh(record)
+    assert record.status == ContentStatus.ANALYZED
+    assert record.content_translation == "하거나 하지 않거나"
 
-    mock_repository.get_content_by.assert_called_once_with(content_id)
-    mock_analyzer.analyze_raw_content.assert_called_once_with(raw_content)
-    mock_repository.update_content.assert_called_once_with(analyzed_content)
 
-
-async def test_analyze_content_not_found(
-    client: AsyncClient, mock_repository: AsyncMock
-) -> None:
-    mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
-
+async def test_analyze_content_not_found(client: AsyncClient) -> None:
+    """존재하지 않는 콘텐츠의 분석 요청은 404를 반환한다."""
     response = await client.post(
         "/api/v1/admin/contents/999/analyze",
         content=b'"quote"',
@@ -177,55 +208,61 @@ async def test_analyze_content_not_found(
     assert response.json()["detail"] == "Content not found: 999"
 
 
-async def test_get_usage_cost(
-    client: AsyncClient, mock_usage_repository: AsyncMock
-) -> None:
-    mock_usage_repository.aggregate_by.return_value = [
-        UsageAggregate(
-            period="2026-06-15",
-            model="gpt-5.2",
-            request_count=3,
-            input_tokens_sum=1000,
-            output_tokens_sum=500,
-        ),
-        UsageAggregate(
-            period="2026-06-15",
-            model="unknown-model",
-            request_count=1,
-            input_tokens_sum=10,
-            output_tokens_sum=10,
-        ),
-    ]
+async def _seed_usage(db_session) -> None:
+    db_session.add_all(
+        [
+            TokenUsageRecord(
+                model="gpt-5.2",
+                input_tokens=500,
+                output_tokens=250,
+                created_at=datetime(2026, 6, 15, 10, 0),
+            ),
+            TokenUsageRecord(
+                model="gpt-5.2",
+                input_tokens=500,
+                output_tokens=250,
+                created_at=datetime(2026, 6, 15, 14, 0),
+            ),
+            TokenUsageRecord(
+                model="unknown-model",
+                input_tokens=10,
+                output_tokens=10,
+                created_at=datetime(2026, 6, 15, 11, 0),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+
+async def test_get_usage_cost(client: AsyncClient, db_session) -> None:
+    """기간 내 실제 사용량 집계로 모델별 비용을 계산하고, 모르는 모델은 비용 없음으로 반환한다."""
+    await _seed_usage(db_session)
 
     response = await client.get(
         "/api/v1/admin/usage/cost",
-        params={
-            "start": "2026-06-01T00:00:00",
-            "end": "2026-07-01T00:00:00",
-        },
+        params={"start": "2026-06-01T00:00:00", "end": "2026-07-01T00:00:00"},
     )
 
     assert response.status_code == 200
     body = response.json()["content"]
     assert len(body) == 2
-    assert body[0]["model"] == "gpt-5.2"
-    assert body[0]["cost"] is not None
-    assert body[1]["model"] == "unknown-model"
-    assert body[1]["cost"] is None
+    by_model = {item["model"]: item for item in body}
+    assert by_model["gpt-5.2"]["request_count"] == 2
+    assert by_model["gpt-5.2"]["cost"] is not None
+    assert by_model["unknown-model"]["cost"] is None
 
 
-async def test_get_usage_cost_applies_free_tier(
-    client: AsyncClient, mock_usage_repository: AsyncMock
-) -> None:
-    mock_usage_repository.aggregate_by.return_value = [
-        UsageAggregate(
-            period="2026-06-15",
+async def test_get_usage_cost_applies_free_tier(client: AsyncClient, db_session) -> None:
+    """무료 티어 적용 시 일일 무료 한도를 차감한 초과분만 과금된다."""
+    db_session.add(
+        TokenUsageRecord(
             model="gpt-5.2",
-            request_count=1,
-            input_tokens_sum=1_000_000,
-            output_tokens_sum=0,
-        ),
-    ]
+            input_tokens=1_000_000,
+            output_tokens=0,
+            created_at=datetime(2026, 6, 15, 12, 0),
+        )
+    )
+    await db_session.commit()
 
     response = await client.get(
         "/api/v1/admin/usage/cost",
@@ -242,19 +279,27 @@ async def test_get_usage_cost_applies_free_tier(
     assert body[0]["cost"] == pytest.approx(750_000 * 1.75 / 1_000_000)
 
 
-async def test_update_status_valid(
-    client: AsyncClient, mock_repository: AsyncMock
-) -> None:
+async def test_update_status_valid(client: AsyncClient, db_session) -> None:
+    """PENDING 콘텐츠 상태 변경 요청 시 DB의 상태가 APPROVED로 갱신된다."""
+    record = await _seed_content(
+        db_session,
+        type=ContentType.QUOTE,
+        status=ContentStatus.PENDING,
+        content="quote",
+    )
+
     response = await client.patch(
-        "/api/v1/admin/contents/1/status",
+        f"/api/v1/admin/contents/{record.id}/status",
         json={"from_status": "pending", "to_status": "approved"},
     )
 
     assert response.status_code == 204
-    mock_repository.update_status.assert_called_once_with(1, ContentStatus.APPROVED)
+    await db_session.refresh(record)
+    assert record.status == ContentStatus.APPROVED
 
 
 async def test_update_status_invalid_transition(client: AsyncClient) -> None:
+    """허용되지 않는 상태 전이 요청은 422 검증 에러를 반환한다."""
     response = await client.patch(
         "/api/v1/admin/contents/1/status",
         json={"from_status": "raw", "to_status": "approved"},
@@ -269,22 +314,30 @@ async def test_update_status_invalid_transition(client: AsyncClient) -> None:
 
 async def test_reanalyze_fields(
     client: AsyncClient,
-    mock_repository: AsyncMock,
+    db_session,
     mock_analyzer: AsyncMock,
     make_content,
 ) -> None:
-    content_id = 1
-    content = make_content(status=ContentStatus.PENDING)
-    updated = make_content(status=ContentStatus.PENDING, content_translation="새 번역")
+    """특정 필드 재분석 요청 시 재분석 결과가 DB에 반영된다."""
+    record = await _seed_content(
+        db_session,
+        type=ContentType.QUOTE,
+        status=ContentStatus.PENDING,
+        content="quote",
+        content_translation="이전 번역",
+    )
     request = [
         ReanalyzeContentField(field_name="content_translation", prompt_guide="formal")
     ]
-
-    mock_repository.get_content_by.return_value = content
-    mock_analyzer.reanalyze_content_field.return_value = updated
+    mock_analyzer.reanalyze_content_field.return_value = make_content(
+        id=record.id,
+        type=ContentType.QUOTE,
+        status=ContentStatus.PENDING,
+        content_translation="새 번역",
+    )
 
     response = await client.patch(
-        f"/api/v1/admin/contents/{content_id}",
+        f"/api/v1/admin/contents/{record.id}",
         json={
             "request": [dataclasses.asdict(item) for item in request],
             "content_type": "quote",
@@ -292,16 +345,15 @@ async def test_reanalyze_fields(
     )
 
     assert response.status_code == 204
-    mock_repository.get_content_by.assert_called_once_with(content_id)
-    mock_analyzer.reanalyze_content_field.assert_called_once_with(content, request)
-    mock_repository.update_content.assert_called_once_with(updated)
+    called_content, called_request = mock_analyzer.reanalyze_content_field.call_args.args
+    assert called_content.id == record.id
+    assert called_request == request
+    await db_session.refresh(record)
+    assert record.content_translation == "새 번역"
 
 
-async def test_reanalyze_fields_not_found(
-    client: AsyncClient, mock_repository: AsyncMock
-) -> None:
-    mock_repository.get_content_by.side_effect = ContentNotFoundError(999)
-
+async def test_reanalyze_fields_not_found(client: AsyncClient) -> None:
+    """존재하지 않는 콘텐츠의 재분석 요청은 404를 반환한다."""
     response = await client.patch(
         "/api/v1/admin/contents/999",
         json={

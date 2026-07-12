@@ -57,6 +57,7 @@ def quote_content():
 async def test_generate_updates_image_url_and_status(
     generator, mock_model, quote_content, pil_image, mocker
 ):
+    """이미지 생성 성공 시 S3 키 규칙에 맞는 image_url과 PENDING 상태로 갱신된다."""
     mock_model.create_image.return_value = pil_image
     mocker.patch(
         "app.image_generator.daily_quote_image_generator.image_text_renderer.add_text",
@@ -74,6 +75,7 @@ async def test_generate_updates_image_url_and_status(
 async def test_regenerate_updates_image_url_and_status(
     generator, mock_model, mock_s3, quote_content, pil_image, mocker
 ):
+    """이미지 재생성 시 기존 이미지를 내려받아 보강하고 edited 경로의 image_url로 갱신된다."""
     mock_s3.download_image.return_value = pil_image
     mock_model.reinforce_image.return_value = pil_image
     mocker.patch(

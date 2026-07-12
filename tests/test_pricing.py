@@ -2,6 +2,7 @@ from app.usage.pricing import FREE_TIER_DAILY_TOKENS, MODEL_PRICING, ModelPricin
 
 
 def test_compute_cost_known_model() -> None:
+    """단가가 등록된 모델은 토큰 수에 비례한 비용을 계산한다."""
     fake_pricing = ModelPricing(input_per_million=2.0, output_per_million=4.0)
 
     original = MODEL_PRICING["gpt-5.2"]
@@ -15,10 +16,12 @@ def test_compute_cost_known_model() -> None:
 
 
 def test_compute_cost_unknown_model_returns_none() -> None:
+    """단가를 모르는 모델은 None을 반환한다."""
     assert compute_cost("some-unpriced-model", 1000, 1000) is None
 
 
 def test_compute_cost_matches_dated_snapshot_name() -> None:
+    """날짜 스냅샷이 붙은 모델명도 기본 모델 단가에 매칭된다."""
     fake_pricing = ModelPricing(input_per_million=2.0, output_per_million=4.0)
 
     original = MODEL_PRICING["gpt-5.2"]
@@ -32,6 +35,7 @@ def test_compute_cost_matches_dated_snapshot_name() -> None:
 
 
 def test_compute_cost_free_tier_fully_covers_usage() -> None:
+    """무료 티어가 사용량을 전부 커버하면 비용은 0이다."""
     fake_pricing = ModelPricing(input_per_million=2.0, output_per_million=4.0)
 
     original_pricing = MODEL_PRICING["gpt-5.2"]
@@ -50,6 +54,7 @@ def test_compute_cost_free_tier_fully_covers_usage() -> None:
 
 
 def test_compute_cost_free_tier_deducts_proportionally() -> None:
+    """무료 티어 초과분만 입력·출력 비율대로 과금된다."""
     fake_pricing = ModelPricing(input_per_million=2.0, output_per_million=4.0)
 
     original_pricing = MODEL_PRICING["gpt-5.2"]
@@ -70,6 +75,7 @@ def test_compute_cost_free_tier_deducts_proportionally() -> None:
 
 
 def test_compute_cost_free_tier_scales_with_days() -> None:
+    """무료 티어 한도는 조회 기간(일수)에 비례해 늘어난다."""
     fake_pricing = ModelPricing(input_per_million=2.0, output_per_million=4.0)
 
     original_pricing = MODEL_PRICING["gpt-5.2"]
@@ -89,6 +95,7 @@ def test_compute_cost_free_tier_scales_with_days() -> None:
 
 
 def test_compute_cost_free_tier_ignored_for_other_models() -> None:
+    """무료 티어는 해당 모델에만 적용되고 다른 모델에는 영향이 없다."""
     cost_with_flag = compute_cost(
         "gpt-image-2-2026-04-21", 1_000_000, 500_000, apply_free_tier=True
     )

@@ -5,41 +5,66 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from pytest_mock import MockerFixture
+from sqlmodel import select
 
-from app.enums import ContentType
+from app.enums import ContentStatus, ContentType
 from app.exceptions import NoApprovedContentError
+from app.repository.mysql._models import ContentRecord
+from app.repository.mysql.repository import MySQLContentRepository
 from app.scheduler import _daily_content_job, _weekly_scraping_job
-from app.schema.content import Content, NewContent
+from app.schema.content import NewContent
 
 
-async def test_daily_content_job_success(mocker: MockerFixture, make_content) -> None:
-    content: Content = make_content(id=42)
-    mock_repo = AsyncMock()
-    mock_repo.reserve_daily_content.return_value = content
+@pytest.fixture
+def patch_get_repository(mocker: MockerFixture, db_session_factory) -> None:
+    """스케줄러의 get_repository가 롤백 격리된 실제 repo를 사용하도록 교체한다."""
 
     @asynccontextmanager
-    async def fake_get_repository():
-        yield mock_repo
+    async def _fake():
+        session = db_session_factory()
+        try:
+            yield MySQLContentRepository(session)
+        finally:
+            await session.close()
 
-    mocker.patch("app.scheduler.get_repository", fake_get_repository)
+    mocker.patch("app.scheduler.get_repository", _fake)
+
+
+async def _seed_approved_contents(db_session) -> None:
+    db_session.add_all(
+        [
+            ContentRecord(
+                type=ContentType.QUOTE,
+                status=ContentStatus.APPROVED,
+                content="Do or do not",
+            ),
+            ContentRecord(
+                type=ContentType.REDDIT_MEME,
+                status=ContentStatus.APPROVED,
+                image_url="https://i.redd.it/cat.jpg",
+            ),
+        ]
+    )
+    await db_session.commit()
+
+
+async def test_daily_content_job_success(patch_get_repository, db_session) -> None:
+    """일일 잡이 승인된 콘텐츠 하나를 오늘 날짜(KST)로 예약(USED) 처리한다."""
+    await _seed_approved_contents(db_session)
 
     await _daily_content_job()
 
-    mock_repo.reserve_daily_content.assert_called_once()
-    call_args = mock_repo.reserve_daily_content.call_args[0]
-    assert call_args[0] == datetime.now(ZoneInfo("Asia/Seoul")).date()
+    used = (
+        await db_session.exec(
+            select(ContentRecord).where(ContentRecord.status == ContentStatus.USED)
+        )
+    ).all()
+    assert len(used) == 1
+    assert used[0].used_at == datetime.now(ZoneInfo("Asia/Seoul")).date()
 
 
-async def test_daily_content_job_no_approved_raises(mocker: MockerFixture) -> None:
-    mock_repo = AsyncMock()
-    mock_repo.reserve_daily_content.side_effect = NoApprovedContentError()
-
-    @asynccontextmanager
-    async def fake_get_repository():
-        yield mock_repo
-
-    mocker.patch("app.scheduler.get_repository", fake_get_repository)
-
+async def test_daily_content_job_no_approved_raises(patch_get_repository) -> None:
+    """예약할 승인 콘텐츠가 없으면 NoApprovedContentError를 전파한다."""
     with pytest.raises(NoApprovedContentError):
         await _daily_content_job()
 
@@ -55,39 +80,39 @@ _MEMES = [
 _QUOTES = [NewContent(type=ContentType.QUOTE, content="Do or do not", author="Yoda")]
 
 
-def _patch_scraping(mocker: MockerFixture, mock_repo: AsyncMock) -> None:
-    @asynccontextmanager
-    async def fake_get_repository():
-        yield mock_repo
-
-    mocker.patch("app.scheduler.get_repository", fake_get_repository)
-
-
-async def test_weekly_scraping_job_inserts_all(mocker: MockerFixture) -> None:
-    mock_repo = AsyncMock()
-    mock_repo.create_contents.return_value = 1
-    _patch_scraping(mocker, mock_repo)
-
+async def test_weekly_scraping_job_inserts_all(
+    patch_get_repository, mocker: MockerFixture, db_session
+) -> None:
+    """주간 스크랩 잡이 reddit 밈과 명언을 수집해 RAW 상태로 저장한다."""
     reddit_client = mocker.patch("app.scheduler.RedditClient").return_value
     reddit_client.fetch_cat_memes = AsyncMock(return_value=_MEMES)
     mocker.patch("app.scheduler.fetch_daily_quotes", AsyncMock(return_value=_QUOTES))
 
     await _weekly_scraping_job()
 
-    assert mock_repo.create_contents.await_count == 2
-    scraped = [call.args[0] for call in mock_repo.create_contents.await_args_list]
-    assert scraped == [_MEMES, _QUOTES]
+    rows = (
+        await db_session.exec(
+            select(ContentRecord).where(ContentRecord.status == ContentStatus.RAW)
+        )
+    ).all()
+    assert len(rows) == 2
+    meme = next(r for r in rows if r.type == ContentType.REDDIT_MEME)
+    assert meme.image_url == "https://i.redd.it/cat.jpg"
+    quote = next(r for r in rows if r.type == ContentType.QUOTE)
+    assert quote.content == "Do or do not"
 
 
-async def test_weekly_scraping_job_isolates_failures(mocker: MockerFixture) -> None:
-    mock_repo = AsyncMock()
-    mock_repo.create_contents.return_value = 1
-    _patch_scraping(mocker, mock_repo)
-
+async def test_weekly_scraping_job_isolates_failures(
+    patch_get_repository, mocker: MockerFixture, db_session
+) -> None:
+    """한 스크래퍼가 실패해도 잡은 예외 없이 나머지 스크래퍼 결과를 저장한다."""
     reddit_client = mocker.patch("app.scheduler.RedditClient").return_value
     reddit_client.fetch_cat_memes = AsyncMock(side_effect=RuntimeError("blocked"))
     mocker.patch("app.scheduler.fetch_daily_quotes", AsyncMock(return_value=_QUOTES))
 
     await _weekly_scraping_job()
 
-    mock_repo.create_contents.assert_awaited_once_with(_QUOTES)
+    rows = (await db_session.exec(select(ContentRecord))).all()
+    assert len(rows) == 1
+    assert rows[0].type == ContentType.QUOTE
+    assert rows[0].content == "Do or do not"

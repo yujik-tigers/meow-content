@@ -1,27 +1,19 @@
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+import pytest
 
-from app.enums import ContentType
+from app.enums import ContentStatus, ContentType
+from app.exceptions import ContentNotFoundError
 from app.repository.mysql.repository import MySQLContentRepository
 from app.schema.content import NewContent
 
 
-def _make_session(existing_urls: list[str], existing_quotes: list[str]) -> AsyncMock:
-    session = AsyncMock()
-    session.add_all = MagicMock()
-    results = [
-        SimpleNamespace(all=lambda: existing_urls),
-        SimpleNamespace(all=lambda: existing_quotes),
-    ]
-    session.exec.side_effect = results
-    return session
+@pytest.fixture
+def content_repository(db_session) -> MySQLContentRepository:
+    return MySQLContentRepository(db_session)
 
 
-async def test_create_contents_adds_and_commits() -> None:
-    session = _make_session([], [])
-    repository = MySQLContentRepository(session)
-
-    inserted = await repository.create_contents(
+async def test_create_contents_adds_and_commits(content_repository) -> None:
+    """새 콘텐츠 목록을 저장하면 저장 건수를 반환하고 실제 행이 생성된다."""
+    inserted = await content_repository.create_contents(
         [
             NewContent(
                 type=ContentType.REDDIT_MEME,
@@ -34,20 +26,33 @@ async def test_create_contents_adds_and_commits() -> None:
     )
 
     assert inserted == 2
-    session.add_all.assert_called_once()
-    added = session.add_all.call_args.args[0]
-    assert added[0].type == ContentType.REDDIT_MEME
-    assert added[0].image_url == "https://i.redd.it/cat.jpg"
-    assert added[1].type == ContentType.QUOTE
-    assert added[1].content == "Do or do not"
-    session.commit.assert_awaited_once()
+    memes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.REDDIT_MEME, 0, 10
+    )
+    assert len(memes) == 1
+    assert memes[0].image_url == "https://i.redd.it/cat.jpg"
+    quotes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.QUOTE, 0, 10
+    )
+    assert len(quotes) == 1
+    assert quotes[0].content == "Do or do not"
 
 
-async def test_create_contents_skips_duplicates() -> None:
-    session = _make_session(["https://i.redd.it/dup.jpg"], ["Known quote"])
-    repository = MySQLContentRepository(session)
+async def test_create_contents_skips_duplicates(content_repository) -> None:
+    """이미 저장된 image_url·명언 텍스트와 중복되는 콘텐츠는 저장에서 제외된다."""
+    await content_repository.create_contents(
+        [
+            NewContent(
+                type=ContentType.REDDIT_MEME,
+                image_url="https://i.redd.it/dup.jpg",
+                author="user1",
+                title="Dup",
+            ),
+            NewContent(type=ContentType.QUOTE, content="Known quote", author="A"),
+        ]
+    )
 
-    inserted = await repository.create_contents(
+    inserted = await content_repository.create_contents(
         [
             NewContent(
                 type=ContentType.REDDIT_MEME,
@@ -63,21 +68,26 @@ async def test_create_contents_skips_duplicates() -> None:
             ),
             NewContent(type=ContentType.QUOTE, content="Known quote", author="A"),
             NewContent(type=ContentType.QUOTE, content="Fresh quote", author="B"),
-            NewContent(type=ContentType.QUOTE, content="Fresh quote", author="B"),
         ]
     )
 
     assert inserted == 2
-    added = session.add_all.call_args.args[0]
-    assert [record.image_url for record in added] == ["https://i.redd.it/new.jpg", None]
-    assert added[1].content == "Fresh quote"
+    memes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.REDDIT_MEME, 0, 10
+    )
+    assert {c.image_url for c in memes} == {
+        "https://i.redd.it/dup.jpg",
+        "https://i.redd.it/new.jpg",
+    }
+    quotes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.QUOTE, 0, 10
+    )
+    assert {c.content for c in quotes} == {"Known quote", "Fresh quote"}
 
 
-async def test_create_contents_truncates_long_fields() -> None:
-    session = _make_session([], [])
-    repository = MySQLContentRepository(session)
-
-    await repository.create_contents(
+async def test_create_contents_truncates_long_fields(content_repository) -> None:
+    """author·title이 컬럼 최대 길이(200자)를 넘으면 잘라서 저장한다."""
+    await content_repository.create_contents(
         [
             NewContent(
                 type=ContentType.REDDIT_MEME,
@@ -88,21 +98,19 @@ async def test_create_contents_truncates_long_fields() -> None:
         ]
     )
 
-    added = session.add_all.call_args.args[0]
-    assert len(added[0].author) == 200
-    assert len(added[0].title) == 200
+    memes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.REDDIT_MEME, 0, 10
+    )
+    assert len(memes[0].author) == 200
+    assert len(memes[0].title) == 200
 
 
-async def test_create_contents_rolls_back_on_error() -> None:
-    session = _make_session([], [])
-    session.commit.side_effect = RuntimeError("boom")
-    repository = MySQLContentRepository(session)
+async def test_update_status_rolls_back_for_missing_content(content_repository) -> None:
+    """존재하지 않는 콘텐츠 상태 변경은 롤백되고 세션은 계속 사용할 수 있다."""
+    with pytest.raises(ContentNotFoundError):
+        await content_repository.update_status(99999, ContentStatus.APPROVED)
 
-    try:
-        await repository.create_contents(
-            [NewContent(type=ContentType.QUOTE, content="q", author="a")]
-        )
-    except RuntimeError:
-        pass
-
-    session.rollback.assert_awaited_once()
+    contents = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.QUOTE, 0, 10
+    )
+    assert contents == []

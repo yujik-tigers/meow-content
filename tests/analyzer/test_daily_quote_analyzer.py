@@ -30,6 +30,7 @@ def raw_quote_content() -> Content:
 async def test_analyze_raw_content(
     quote_analyzer: DailyQuoteAnalyzer, raw_quote_content: Content
 ) -> None:
+    """RAW 명언을 LLM으로 분석하면 번역·표현·배경이 채워지고 ANALYZED 상태가 된다."""
     mock_result = QuoteAnalyzeResult(
         quote_translation="위대한 일을 하는 유일한 방법은 자신이 하는 일을 사랑하는 것이다.",
         expression="love what you do",
@@ -54,6 +55,7 @@ async def test_analyze_raw_content(
 async def test_reanalyze_content_field(
     quote_analyzer: DailyQuoteAnalyzer, raw_quote_content: Content
 ) -> None:
+    """요청한 필드만 프롬프트 가이드에 따라 재분석되어 갱신된다."""
     new_translation = "새로운 명언 번역"
     new_expression = "make a difference"
 

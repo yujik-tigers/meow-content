@@ -1,4 +1,12 @@
+import asyncio
 import os
+
+# 실제 DB 테스트는 개발용 meow DB가 아닌 전용 meow_test DB를 사용한다.
+# setdefault가 아닌 강제 할당: 셸/.env의 MYSQL_URL이 테스트로 새어 들어오는 것을 차단.
+TEST_MYSQL_URL = os.environ.get(
+    "TEST_MYSQL_URL", "mysql+aiomysql://root:root@127.0.0.1:3306/meow_test"
+)
+os.environ["MYSQL_URL"] = TEST_MYSQL_URL
 
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
@@ -7,7 +15,6 @@ os.environ.setdefault("CLOUDFLARE_ACCOUNT_ID", "test-cf-account")
 os.environ.setdefault("CLOUDFLARE_IMAGE_GEN_MODEL", "test-model")
 os.environ.setdefault("MEME_FONT_PATH", "/fake/font.ttf")
 os.environ.setdefault("MEME_FONT_PATH_KOR", "/fake/font_kor.ttf")
-os.environ.setdefault("MYSQL_URL", "mysql+aiomysql://test:test@localhost/test_db")
 os.environ.setdefault("SCHEDULER_HOUR", "9")
 os.environ.setdefault("SCHEDULER_MINUTE", "0")
 os.environ.setdefault("SCRAPER_DAY_OF_WEEK", "mon")
@@ -24,17 +31,103 @@ os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test-secret-key")
 os.environ.setdefault("AWS_REGION", "us-east-1")
 os.environ.setdefault("AWS_S3_BUCKET_NAME", "test-bucket")
 
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.analyzer.base import ContentAnalyzer
 from app.enums import ContentStatus, ContentType
 from app.image_generator.base import ImageGenerator
-from app.repository.base import ContentRepository, TokenUsageRepository
 from app.schema.content import Content
+
+
+@pytest.fixture(scope="session")
+def mysql_available() -> bool:
+    """meow_test DB를 생성·초기화하고 MySQL 접속 가능 여부를 반환한다 (불가 시 DB 테스트는 skip)."""
+
+    async def _setup() -> None:
+        server_url = TEST_MYSQL_URL.rsplit("/", 1)[0] + "/"
+        server_engine = create_async_engine(
+            server_url, connect_args={"connect_timeout": 3}
+        )
+        try:
+            async with server_engine.connect() as conn:
+                await conn.execute(
+                    text(
+                        "CREATE DATABASE IF NOT EXISTS meow_test "
+                        "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    )
+                )
+        finally:
+            await server_engine.dispose()
+
+        test_engine = create_async_engine(TEST_MYSQL_URL)
+        try:
+            async with test_engine.begin() as conn:
+                await conn.run_sync(SQLModel.metadata.drop_all)
+                await conn.run_sync(SQLModel.metadata.create_all)
+        finally:
+            await test_engine.dispose()
+
+    try:
+        asyncio.run(_setup())
+    except (OperationalError, OSError, asyncio.TimeoutError):
+        return False
+    return True
+
+
+@pytest.fixture
+async def db_engine(mysql_available: bool) -> AsyncIterator[AsyncEngine]:
+    """테스트 함수의 이벤트 루프 안에서 생성·폐기되는 엔진 (MySQL 미기동 시 skip)."""
+    if not mysql_available:
+        pytest.skip("MySQL (meow-mysql container) unreachable; skipping DB test")
+    engine = create_async_engine(TEST_MYSQL_URL, poolclass=NullPool)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture
+async def db_connection(db_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
+    """테스트 전체를 감싸는 outer 트랜잭션 — teardown에서 롤백되어 데이터가 남지 않는다."""
+    async with db_engine.connect() as conn:
+        transaction = await conn.begin()
+        yield conn
+        await transaction.rollback()
+
+
+@pytest.fixture
+def db_session_factory(
+    db_connection: AsyncConnection,
+) -> Callable[[], AsyncSession]:
+    """같은 outer 트랜잭션 위에 새 세션을 만드는 팩토리 — commit은 SAVEPOINT만 해제한다."""
+
+    def _factory() -> AsyncSession:
+        return AsyncSession(
+            bind=db_connection,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+async def db_session(
+    db_session_factory: Callable[[], AsyncSession],
+) -> AsyncIterator[AsyncSession]:
+    """롤백 격리된 실제 DB 세션."""
+    session = db_session_factory()
+    yield session
+    await session.close()
 
 
 @pytest.fixture
@@ -72,12 +165,6 @@ def make_content():
 
 
 @pytest.fixture
-def mock_repository() -> AsyncMock:
-    mock = AsyncMock(spec=ContentRepository)
-    return mock
-
-
-@pytest.fixture
 def mock_analyzer() -> AsyncMock:
     return AsyncMock(spec=ContentAnalyzer)
 
@@ -88,19 +175,15 @@ def mock_image_generator() -> AsyncMock:
 
 
 @pytest.fixture
-def mock_usage_repository() -> AsyncMock:
-    return AsyncMock(spec=TokenUsageRepository)
-
-
-@pytest.fixture
-async def client(
-    mock_repository, mock_analyzer, mock_image_generator, mock_usage_repository
-):
-    from app.dependencies import inject_repository, inject_usage_repository
+async def client(db_session, mock_analyzer, mock_image_generator):
+    """실제 DB 세션이 주입된 API 테스트 클라이언트 — AI/S3 경계(analyzer, generator)만 mock."""
+    from app.dependencies import inject_db_session
     from app.main import app
 
-    app.dependency_overrides[inject_repository] = lambda: mock_repository
-    app.dependency_overrides[inject_usage_repository] = lambda: mock_usage_repository
+    async def _override_session():
+        yield db_session
+
+    app.dependency_overrides[inject_db_session] = _override_session
 
     with (
         patch("app.main.create_tables", new=AsyncMock()),

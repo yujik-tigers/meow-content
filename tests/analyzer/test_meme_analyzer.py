@@ -34,6 +34,7 @@ def raw_meme_content() -> Content:
 async def test_analyze_raw_content(
     meme_analyzer: RedditMemeAnalyzer, raw_meme_content: Content
 ) -> None:
+    """RAW 밈을 LLM으로 분석하면 밈 텍스트·번역·배경이 채워지고 PENDING 상태가 된다."""
     mock_result = MemeAnalyzeResult(
         meme_text="meme text",
         meme_text_translation="밈 번역",
@@ -59,6 +60,7 @@ async def test_analyze_raw_content(
 async def test_reanalyze_content_field(
     meme_analyzer: RedditMemeAnalyzer, raw_meme_content: Content
 ) -> None:
+    """요청한 필드만 프롬프트 가이드에 따라 재분석되어 갱신된다."""
     new_translation = "새로운 번역"
     new_expression = "turns out"
 

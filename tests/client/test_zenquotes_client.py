@@ -5,6 +5,7 @@ from app.enums import ContentType
 
 
 async def test_fetch_daily_quotes():
+    """ZenQuotes API 응답(q/a)이 QUOTE 타입 NewContent 목록으로 매핑된다."""
     mock_response = MagicMock()
     mock_response.json.return_value = [
         {"q": "Life is short", "a": "Anonymous"},

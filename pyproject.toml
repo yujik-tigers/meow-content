@@ -46,6 +46,8 @@ banned-api = {"app.repository.mysql._models" = {msg = "MySQL 엔티티는 reposi
 [tool.ruff.lint.per-file-ignores]
 "app/repository/mysql/repository.py" = ["TID251"]
 "tests/**" = ["TID251"]
+# env 변수를 app import보다 먼저 설정해야 하므로 import 위치 규칙 예외
+"tests/conftest.py" = ["TID251", "E402"]
 
 [tool.poetry.group.dev.dependencies]
 pyright = "^1.1.408"

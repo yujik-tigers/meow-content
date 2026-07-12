@@ -1,28 +1,23 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches: [ "main" ]
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.13'
-
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
@@ -31,72 +26,46 @@ jobs:
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
 
   deploy:
-      needs: build-and-push # build-and-push 작업이 성공해야 실행됨
-      runs-on: ubuntu-latest
-      
-      steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-2
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
-      - name: Get GitHub Runner IP
-        id: ip
-        run: echo "ipv4=$(curl -s https://api.ipify.org)" >> $GITHUB_OUTPUT
+    steps:
+    - name: Connect to Tailscale
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci
 
-      - name: Add Runner IP to Security Group
-        run: |
-          aws ec2 authorize-security-group-ingress \
-            --group-id ${{ secrets.EC2_SG_ID }} \
-            --protocol tcp --port 22 \
-            --cidr ${{ steps.ip.outputs.ipv4 }}/32
+    - name: Deploy to homelab via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_TS_IP }}
+        username: deploy
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          docker stop meow-content meow-streamlit || true
+          docker rm meow-content meow-streamlit || true
 
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            # 기존 컨테이너 중지 및 삭제
-            docker stop meow-content meow-streamlit || true
-            docker rm meow-content meow-streamlit || true
+          echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.tmp
 
-            # .env 파일 생성
-            echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.tmp
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
 
-            # 최신 이미지 Pull
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
+          docker run -d \
+            --name meow-content \
+            --network meow-network \
+            -v ~/meow-content/images:/code/app/images \
+            --env-file .env.tmp \
+            -e TZ=Asia/Seoul \
+            ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
 
-            # FastAPI 컨테이너 실행
-            docker run -d \
-              --name meow-content \
-              --network meow-network \
-              -p 8000:8000 \
-              -v ~/meow-content/images:/code/app/images \
-              --env-file .env.tmp \
-              -e TZ=Asia/Seoul \
-              ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest
+          docker run -d \
+            --name meow-streamlit \
+            --network meow-network \
+            --env-file .env.tmp \
+            -e TZ=Asia/Seoul \
+            -e API_BASE_URL=http://meow-content:8000 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest \
+            streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0 --server.baseUrlPath /admin
 
-            # Streamlit 컨테이너 실행
-            docker run -d \
-              --name meow-streamlit \
-              --network meow-network \
-              -p 8501:8501 \
-              --env-file .env.tmp \
-              -e TZ=Asia/Seoul \
-              -e API_BASE_URL=http://meow-content:8000 \
-              ${{ secrets.DOCKERHUB_USERNAME }}/meow-content:latest \
-              streamlit run view/meme_inspection.py --server.port 8501 --server.address 0.0.0.0 --server.baseUrlPath /admin
-
-            rm -f .env.tmp
-
-      - name: Remove Runner IP from Security Group
-        if: always() # Ensure this runs even if deployment fails
-        run: |
-          aws ec2 revoke-security-group-ingress \
-            --group-id ${{ secrets.EC2_SG_ID }} \
-            --protocol tcp --port 22 \
-            --cidr ${{ steps.ip.outputs.ipv4 }}/32
+          rm -f .env.tmp
