@@ -1,5 +1,5 @@
 # CI/CD가 push마다 재배포하는 앱 스택 (meow-content, meow-streamlit).
-# MySQL/Qdrant는 별도 docker-compose.infra.yml로 미리 떠 있어야 한다.
+# MySQL/Qdrant는 미리 떠 있어야 한다.
 
 services:
   meow-content:
