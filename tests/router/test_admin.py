@@ -4,10 +4,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
+from sqlmodel import select
 
 from app.enums import ContentStatus, ContentType, RegenerateType
 from app.repository.mysql._models import ContentRecord, TokenUsageRecord
-from app.schema.content import ReanalyzeContentField
+from app.schema.content import NewContent, ReanalyzeContentField
 
 
 async def _seed_content(db_session, **kwargs) -> ContentRecord:
@@ -252,7 +253,9 @@ async def test_get_usage_cost(client: AsyncClient, db_session) -> None:
     assert by_model["unknown-model"]["cost"] is None
 
 
-async def test_get_usage_cost_applies_free_tier(client: AsyncClient, db_session) -> None:
+async def test_get_usage_cost_applies_free_tier(
+    client: AsyncClient, db_session
+) -> None:
     """무료 티어 적용 시 일일 무료 한도를 차감한 초과분만 과금된다."""
     db_session.add(
         TokenUsageRecord(
@@ -345,7 +348,9 @@ async def test_reanalyze_fields(
     )
 
     assert response.status_code == 204
-    called_content, called_request = mock_analyzer.reanalyze_content_field.call_args.args
+    called_content, called_request = (
+        mock_analyzer.reanalyze_content_field.call_args.args
+    )
     assert called_content.id == record.id
     assert called_request == request
     await db_session.refresh(record)
@@ -363,3 +368,28 @@ async def test_reanalyze_fields_not_found(client: AsyncClient) -> None:
     )
 
     assert response.status_code == 404
+
+
+async def test_trigger_scraping(
+    client: AsyncClient, db_session, mock_scraper: AsyncMock
+) -> None:
+    """스크래핑 트리거 요청 시 선택된 타입의 스크래퍼가 실행되고 결과가 RAW로 저장된다."""
+    mock_scraper.scrape.return_value = [
+        NewContent(
+            type=ContentType.REDDIT_MEME,
+            image_url="https://i.redd.it/cat.jpg",
+            author="user1",
+            title="Cat",
+        )
+    ]
+
+    response = await client.post(
+        "/api/v1/admin/scrap", json={"content_type": "reddit_meme"}
+    )
+
+    assert response.status_code == 204
+    mock_scraper.scrape.assert_awaited_once()
+    rows = (await db_session.exec(select(ContentRecord))).all()
+    assert len(rows) == 1
+    assert rows[0].status == ContentStatus.RAW
+    assert rows[0].image_url == "https://i.redd.it/cat.jpg"

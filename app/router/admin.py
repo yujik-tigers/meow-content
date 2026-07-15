@@ -16,9 +16,11 @@ from app.schema.content import (
     GenerateImageRequest,
     ReanalyzeContentField,
     RegenerateImageRequest,
+    ScrapingRequest,
     UpdateContentStatusRequest,
 )
 from app.schema.usage import UsageCostSummary
+from app.scrap.factory import ScraperFactory
 from app.usage.pricing import compute_cost
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -131,3 +133,13 @@ async def get_usage_cost(
         for aggregate in aggregates
     ]
     return ApiResponse(status.HTTP_200_OK, "OK", summaries)
+
+
+@router.post("/scrap", status_code=status.HTTP_204_NO_CONTENT)
+async def trigger_scraping(
+    request: ScrapingRequest,
+    repository: Annotated[ContentRepository, Depends(inject_repository)],
+) -> None:
+    scraper = ScraperFactory.get_scraper(request.content_type)
+    contents = await scraper.scrape()
+    await repository.create_contents(contents)

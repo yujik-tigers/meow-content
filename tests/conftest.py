@@ -47,6 +47,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.analyzer.base import ContentAnalyzer
 from app.enums import ContentStatus, ContentType
 from app.image_generator.base import ImageGenerator
+from app.scrap.base import Scraper
 from app.schema.content import Content
 
 
@@ -175,8 +176,13 @@ def mock_image_generator() -> AsyncMock:
 
 
 @pytest.fixture
-async def client(db_session, mock_analyzer, mock_image_generator):
-    """실제 DB 세션이 주입된 API 테스트 클라이언트 — AI/S3 경계(analyzer, generator)만 mock."""
+def mock_scraper() -> AsyncMock:
+    return AsyncMock(spec=Scraper)
+
+
+@pytest.fixture
+async def client(db_session, mock_analyzer, mock_image_generator, mock_scraper):
+    """실제 DB 세션이 주입된 API 테스트 클라이언트 — AI/S3/스크래핑 경계만 mock."""
     from app.dependencies import inject_db_session
     from app.main import app
 
@@ -198,6 +204,10 @@ async def client(db_session, mock_analyzer, mock_image_generator):
         patch(
             "app.router.admin.AnalyzerFactory.get_analyzer",
             return_value=mock_analyzer,
+        ),
+        patch(
+            "app.router.admin.ScraperFactory.get_scraper",
+            return_value=mock_scraper,
         ),
     ):
         async with AsyncClient(

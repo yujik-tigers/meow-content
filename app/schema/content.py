@@ -74,3 +74,8 @@ class RegenerateImageRequest:
     regenerate_type: RegenerateType
     content_type: ContentType
     model: GptImageModel | NanoBananaModel
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScrapingRequest:
+    content_type: ContentType

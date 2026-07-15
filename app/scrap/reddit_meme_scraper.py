@@ -3,7 +3,9 @@ import logging
 from playwright.async_api import BrowserContext, async_playwright
 
 from app.enums import ContentType
+from app.scrap.base import Scraper
 from app.schema.content import NewContent
+from app.settings import app_config
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +16,11 @@ _USER_AGENT = (
 _IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".gif", ".webp")
 
 
-class RedditClient:
+class RedditMemeScraper(Scraper):
 
     _SUBREDDIT = "catmemes"
 
-    def __init__(self, count: int, time_filter: str) -> None:
-        self._count = count
-        self._time_filter = time_filter
-
-    async def fetch_cat_memes(self) -> list[NewContent]:
+    async def scrape(self) -> list[NewContent]:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(
                 headless=True,
@@ -47,7 +45,7 @@ class RedditClient:
         page = await context.new_page()
         response = await page.goto(
             f"https://www.reddit.com/r/{self._SUBREDDIT}/top.json"
-            f"?limit={self._count}&t={self._time_filter}",
+            f"?limit={app_config.REDDIT_MEME_COUNT}&t={app_config.REDDIT_TIME_FILTER}",
             wait_until="domcontentloaded",
             timeout=30_000,
         )
@@ -70,7 +68,7 @@ class RedditClient:
     async def _fetch_via_old_reddit(self, context: BrowserContext) -> list[NewContent]:
         page = await context.new_page()
         response = await page.goto(
-            f"https://old.reddit.com/r/{self._SUBREDDIT}/top/?t={self._time_filter}",
+            f"https://old.reddit.com/r/{self._SUBREDDIT}/top/?t={app_config.REDDIT_TIME_FILTER}",
             wait_until="domcontentloaded",
             timeout=30_000,
         )
@@ -91,6 +89,9 @@ class RedditClient:
                     title=await thing.locator("a.title").first.inner_text(),
                 )
             )
-            if len(memes) >= self._count:
+            if len(memes) >= app_config.REDDIT_MEME_COUNT:
                 break
         return memes
+
+
+reddit_meme_scraper = RedditMemeScraper()

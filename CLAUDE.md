@@ -17,7 +17,7 @@ poetry run uvicorn app.main:app --reload            # API server (needs .env)
 poetry run streamlit run view/meme_inspection.py    # admin UI
 
 poetry run pytest                   # all tests (coverage on app/)
-poetry run pytest tests/scheduler/test_scheduler.py::test_weekly_scraping_job_inserts_all  # single test
+poetry run pytest tests/scrap/test_reddit_meme_scraper.py::test_scrape_via_json_success  # single test
 poetry run ruff check .             # lint
 poetry run pyright                  # type check (standard mode)
 ```
@@ -30,7 +30,7 @@ A populated `.env` at the repo root is required to import `app.settings` (all fi
 
 Everything revolves around one MySQL table `content` (`ContentRecord` in `app/repository/mysql/_models.py`) shared by all content types (`ContentType`: reddit_meme, quote, literal_quote, fact) and moved through `ContentStatus`: `RAW → ANALYZED/PENDING → APPROVED → USED` (or `REJECTED`).
 
-1. **Ingest**: `app/scheduler.py` `_weekly_scraping_job` (APScheduler cron, `SCRAPER_*` settings) calls `app/client/` scrapers and inserts rows with `status=RAW`, deduplicating by `image_url`/quote text in `create_contents`.
+1. **Ingest**: admin-triggered — `POST /api/v1/admin/scrap` (`app/router/admin.py`) takes a `ScrapingRequest{content_type}` body, resolves a `Scraper` via `ScraperFactory` (`app/scrap/`), and inserts rows with `status=RAW`, deduplicating by `image_url`/quote text in `create_contents`. There is no scheduled scraping job — trigger it manually (e.g. the Streamlit admin UI's "지금 스크래핑 실행" button, one request per content type).
 2. **Curate**: admin API (`app/router/admin.py`, `/api/v1/admin`) + Streamlit UI analyze content with LLMs (`app/analyzer/`), generate images (`app/image_generator/`), and approve/reject.
 3. **Serve**: `_daily_content_job` reserves one APPROVED content per day (odd day = quote, even day = meme) marking it USED; public API (`app/router/content.py`, `GET /api/v1/contents/?date=`) returns it.
 
@@ -42,11 +42,15 @@ There are no migrations — `create_tables()` runs `SQLModel.metadata.create_all
 
 ### Scheduler
 
-`AsyncIOScheduler` (Asia/Seoul) is created in the FastAPI lifespan, so scheduled jobs run inside the API process only — the Streamlit container overrides CMD and never runs them. Job failures in `_weekly_scraping_job` are logged and swallowed per source (retry is simply the next scheduled run).
+`AsyncIOScheduler` (Asia/Seoul) is created in the FastAPI lifespan, so scheduled jobs run inside the API process only — the Streamlit container overrides CMD and never runs them. It only registers `_daily_content_job` (daily content reservation); scraping has no cron job and is triggered on-demand via the admin API instead.
+
+### Scraper package (`app/scrap/`)
+
+Mirrors the `app/analyzer/`/`app/image_generator/` domain-package pattern: `base.py` defines the `Scraper` ABC (`async def scrape() -> list[NewContent]`), `reddit_meme_scraper.py`/`daily_quote_scraper.py` implement it (each exporting a module-level singleton), and `factory.py`'s `ScraperFactory.get_scraper(content_type)` dispatches between them. There is no separate HTTP/browser client layer — each scraper owns its own fetching logic directly.
 
 ### Reddit scraping quirk
 
-`www.reddit.com/.../top.json` returns 403 even from a real browser. `RedditClient` (`app/client/reddit_client.py`) launches headless Playwright Chromium (`--no-sandbox` etc. for Docker), tries the JSON endpoint first, and falls back to parsing `old.reddit.com` HTML (`div.thing[data-url]`) — the fallback is currently the path that actually works, so the weekly WARNING log is expected.
+`www.reddit.com/.../top.json` returns 403 even from a real browser. `RedditMemeScraper` (`app/scrap/reddit_meme_scraper.py`) launches headless Playwright Chromium (`--no-sandbox` etc. for Docker), tries the JSON endpoint first, and falls back to parsing `old.reddit.com` HTML (`div.thing[data-url]`) — the fallback is currently the path that actually works, so a WARNING log on every scrape trigger is expected.
 
 ### LLM usage tracking
 

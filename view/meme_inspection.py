@@ -250,6 +250,16 @@ def regenerate_image(
     return resp.json().get("content", {})
 
 
+def trigger_scraping(base_url: str) -> None:
+    for content_type in ("reddit_meme", "quote"):
+        resp = requests.post(
+            f"{base_url}/api/v1/admin/scrap",
+            json={"content_type": content_type},
+            timeout=180,
+        )
+        resp.raise_for_status()
+
+
 def fetch_usage_summary(
     base_url: str,
     start: datetime,
@@ -306,6 +316,16 @@ def render_sidebar() -> None:
         st.select_slider(
             "Page Size", options=[10, 20, 50], key="page_size", on_change=_reset_page
         )
+
+        st.divider()
+        if st.button("지금 스크래핑 실행", use_container_width=True):
+            with st.spinner("스크래핑 실행 중..."):
+                try:
+                    trigger_scraping(str(st.session_state.base_url))
+                    st.success("스크래핑 완료. RAW 콘텐츠 목록을 확인하세요.")
+                    fetch_contents.clear()
+                except requests.exceptions.RequestException as e:
+                    st.error(f"스크래핑 실패: {e}")
 
 
 # ── Usage / Cost summary ────────────────────────────────────────────────────────
