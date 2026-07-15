@@ -8,11 +8,13 @@ from PIL import Image as PILModule
 from app.enums import ContentStatus, ContentType, RegenerateType
 from app.image_generator.daily_quote_image_generator import DailyQuoteImageGenerator
 from app.image_generator.diffusion_model import DiffusionModel
-from app.image_generator.s3_uploader import S3Client
+from app.image_generator.s3_image_storage import S3ImageStorage
 from app.schema.content import Content
 from app.settings import app_config
 
-BUCKET_BASE = f"https://{app_config.AWS_S3_BUCKET_NAME}.s3.{app_config.AWS_REGION}.amazonaws.com"
+BUCKET_BASE = (
+    f"https://{app_config.AWS_S3_BUCKET_NAME}.s3.{app_config.AWS_REGION}.amazonaws.com"
+)
 TEST_DATE = date(2024, 1, 1)
 TEST_TIMESTAMP = "240101120000"
 
@@ -24,7 +26,7 @@ def mock_model():
 
 @pytest.fixture
 def mock_s3():
-    mock = AsyncMock(spec=S3Client)
+    mock = AsyncMock(spec=S3ImageStorage)
     mock.upload_image.side_effect = lambda _, key: f"{BUCKET_BASE}/{key}"
     return mock
 
@@ -69,7 +71,9 @@ async def test_generate_updates_image_url_and_status(
     result = await generator.generate(quote_content)
 
     expected_url = f"{BUCKET_BASE}/daily_quote/{TEST_DATE}/{quote_content.id}.png"
-    assert result == replace(quote_content, image_url=expected_url, status=ContentStatus.PENDING)
+    assert result == replace(
+        quote_content, image_url=expected_url, status=ContentStatus.PENDING
+    )
 
 
 async def test_regenerate_updates_image_url_and_status(
@@ -84,10 +88,16 @@ async def test_regenerate_updates_image_url_and_status(
     )
     mock_date = mocker.patch("app.image_generator.daily_quote_image_generator.date")
     mock_date.today.return_value = TEST_DATE
-    mock_datetime = mocker.patch("app.image_generator.daily_quote_image_generator.datetime")
+    mock_datetime = mocker.patch(
+        "app.image_generator.daily_quote_image_generator.datetime"
+    )
     mock_datetime.now.return_value.strftime.return_value = TEST_TIMESTAMP
 
-    result = await generator.regenerate(quote_content, "make it darker", RegenerateType.MODIFY)
+    result = await generator.regenerate(
+        quote_content, "make it darker", RegenerateType.MODIFY
+    )
 
     expected_url = f"{BUCKET_BASE}/daily_quote/{TEST_DATE}/{quote_content.id}/edited/{TEST_TIMESTAMP}.png"
-    assert result == replace(quote_content, image_url=expected_url, status=ContentStatus.PENDING)
+    assert result == replace(
+        quote_content, image_url=expected_url, status=ContentStatus.PENDING
+    )

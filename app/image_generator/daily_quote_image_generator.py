@@ -6,15 +6,15 @@ from app.enums import ContentStatus, RegenerateType
 from app.image_generator import image_text_renderer
 from app.image_generator.base import ImageGenerator
 from app.image_generator.diffusion_model import DiffusionModel
-from app.image_generator.s3_uploader import S3Client
+from app.image_generator.image_storage import ImageStorage
 from app.schema.content import Content
 
 
 class DailyQuoteImageGenerator(ImageGenerator):
 
-    def __init__(self, model: DiffusionModel, s3_client: S3Client) -> None:
+    def __init__(self, model: DiffusionModel, image_storage: ImageStorage) -> None:
         self._model = model
-        self._s3_client = s3_client
+        self._image_storage = image_storage
 
     @override
     async def generate(self, content: Content) -> Content:
@@ -38,7 +38,7 @@ No text in the image."""
             image, content.content, content.author
         )
 
-        image_url = await self._s3_client.upload_image(
+        image_url = await self._image_storage.upload_image(
             text_rendered_image, f"daily_quote/{date.today()}/{content.id}.png"
         )
 
@@ -68,7 +68,7 @@ Return only the edited image.
             assert (
                 content.image_url is not None
             ), "Content must have an existing image URL for regeneration"
-            image = await self._s3_client.download_image(content.image_url)
+            image = await self._image_storage.download_image(content.image_url)
             image_generate_prompt = f"""
 You are an image editing assistant. 
 The user will provide an existing image and a description of the changes they want. 
@@ -89,7 +89,7 @@ Return only the edited image.
         )
 
         timestamp = datetime.now().strftime("%y%m%d%H%M%S")
-        image_url = await self._s3_client.upload_image(
+        image_url = await self._image_storage.upload_image(
             text_rendered_image,
             f"daily_quote/{date.today()}/{content.id}/edited/{timestamp}.png",
         )

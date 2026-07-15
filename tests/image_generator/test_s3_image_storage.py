@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from PIL import Image as PILModule
 
-from app.image_generator.s3_uploader import S3Client
+from app.image_generator.s3_image_storage import S3ImageStorage
 from app.settings import app_config
 
 BUCKET = app_config.AWS_S3_BUCKET_NAME
@@ -14,8 +14,8 @@ BASE_URL = f"https://{BUCKET}.s3.{REGION}.amazonaws.com"
 
 @pytest.fixture
 def s3_client(mocker):
-    mocker.patch("app.image_generator.s3_uploader.aioboto3.Session")
-    return S3Client()
+    mocker.patch("app.image_generator.s3_image_storage.aioboto3.Session")
+    return S3ImageStorage()
 
 
 def _setup_mock_s3(s3_client) -> AsyncMock:

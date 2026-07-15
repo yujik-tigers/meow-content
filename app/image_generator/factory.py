@@ -2,7 +2,7 @@ from app.enums import ContentType, GptImageModel, NanoBananaModel
 from app.image_generator.base import ImageGenerator
 from app.image_generator.daily_quote_image_generator import DailyQuoteImageGenerator
 from app.image_generator.diffusion_model import GptImage2, NanoBanana
-from app.image_generator.s3_uploader import S3Client
+from app.image_generator.local_image_storage import LocalImageStorage
 
 
 class ImageGeneratorFactory:
@@ -16,6 +16,8 @@ class ImageGeneratorFactory:
             model = GptImage2(diffusion_model)
 
         if content_type == ContentType.QUOTE:
-            return DailyQuoteImageGenerator(model=model, s3_client=S3Client())
+            return DailyQuoteImageGenerator(
+                model=model, image_storage=LocalImageStorage()
+            )
 
         raise ValueError(f"Unsupported content type to generate image: {content_type}")

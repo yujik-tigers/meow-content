@@ -10,7 +10,7 @@ from app.image_generator.factory import ImageGeneratorFactory
 def mock_clients(mocker):
     mocker.patch("app.image_generator.diffusion_model.ChatGoogleGenerativeAI")
     mocker.patch("app.image_generator.diffusion_model.AsyncOpenAI")
-    mocker.patch("app.image_generator.factory.S3Client")
+    mocker.patch("app.image_generator.factory.LocalImageStorage")
 
 
 def test_get_image_generator_with_nano_banana_model():

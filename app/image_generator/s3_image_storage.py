@@ -4,6 +4,7 @@ import aioboto3
 from PIL import Image as PILImage
 from PIL.Image import Image
 
+from app.image_generator.image_storage import ImageStorage
 from app.settings import app_config
 
 _CONTENT_TYPE_MAP = {
@@ -12,7 +13,7 @@ _CONTENT_TYPE_MAP = {
 }
 
 
-class S3Client:
+class S3ImageStorage(ImageStorage):
     def __init__(self) -> None:
         self._session = aioboto3.Session(
             region_name=app_config.AWS_REGION,

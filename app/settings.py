@@ -1,7 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.enums import DayOfWeek
-
 
 class Settings(BaseSettings):
 
@@ -25,9 +23,6 @@ class Settings(BaseSettings):
     SCHEDULER_HOUR: int
     SCHEDULER_MINUTE: int
 
-    SCRAPER_DAY_OF_WEEK: DayOfWeek
-    SCRAPER_HOUR: int
-    SCRAPER_MINUTE: int
     REDDIT_MEME_COUNT: int
     REDDIT_TIME_FILTER: str
 
@@ -40,6 +35,9 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str
     AWS_S3_BUCKET_NAME: str
+
+    IMAGE_STORAGE_DIR: str
+    MEDIA_BASE_URL: str
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
