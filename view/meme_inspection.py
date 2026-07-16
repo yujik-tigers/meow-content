@@ -191,7 +191,7 @@ def analyze_content(base_url: str, content_id: int, content_type: str) -> dict:
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/analyze",
         json=content_type,
-        timeout=60,
+        timeout=180,
     )
     resp.raise_for_status()
     return resp.json().get("content", {})
@@ -217,7 +217,7 @@ def reanalyze_fields(
     resp = requests.patch(
         f"{base_url}/api/v1/admin/contents/{content_id}",
         json={"request": fields, "content_type": content_type},
-        timeout=60,
+        timeout=180,
     )
     resp.raise_for_status()
 
@@ -226,7 +226,7 @@ def generate_image(base_url: str, content_id: int, content_type: str, model: str
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/image",
         json={"model": model, "content_type": content_type},
-        timeout=60,
+        timeout=180,
     )
     resp.raise_for_status()
     return resp.json().get("content", {})
@@ -248,7 +248,7 @@ def regenerate_image(
             "prompt": prompt,
             "regenerate_type": regenerate_type,
         },
-        timeout=60,
+        timeout=180,
     )
     resp.raise_for_status()
     return resp.json().get("content", {})
