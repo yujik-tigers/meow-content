@@ -1,8 +1,11 @@
+import functools
 import hashlib
 import logging
 import os
 import threading
 import time
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 
 import requests
@@ -15,6 +18,7 @@ _ADMIN_PW_HASH = hashlib.sha256(os.environ["ADMIN_PASSWORD"].encode()).hexdigest
 
 MAX_FAILURES = 5
 LOCKOUT_SECONDS = 60
+BULK_MAX_WORKERS = 5
 
 ALL_CONTENT_TYPES = ["reddit_meme", "quote", "literal_quote", "fact"]
 ALL_STATUSES = ["raw", "analyzed", "pending", "approved", "rejected", "used"]
@@ -396,6 +400,23 @@ def render_usage_page() -> None:
 
 # ── Bulk Actions ──────────────────────────────────────────────────────────────
 
+
+def _run_bulk_concurrent(
+    tasks: Sequence[tuple[int, Callable[[], object]]],
+    max_workers: int = BULK_MAX_WORKERS,
+) -> list[str]:
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_id = {executor.submit(fn): content_id for content_id, fn in tasks}
+        for future in as_completed(future_to_id):
+            content_id = future_to_id[future]
+            try:
+                future.result()
+            except Exception as e:
+                errors.append(f"#{content_id}: {e}")
+    return errors
+
+
 _BULK_ACTIONS: dict[str, list[tuple[str, str]]] = {
     "raw": [("bulk reject", "rejected")],
     "analyzed": [("bulk pending", "pending"), ("bulk reject", "rejected")],
@@ -410,11 +431,16 @@ def render_bulk_actions(items: list[dict], selected_ids: set[int]) -> None:
     actions = _BULK_ACTIONS.get(status, [])
 
     base_url = st.session_state.base_url
+    content_type = st.session_state.content_type
     all_ids = {item["id"] for item in items}
     all_selected = bool(selected_ids) and selected_ids >= all_ids
 
+    show_bulk_analyze = status == "raw"
+    show_bulk_generate = status == "analyzed"
+    n_special = int(show_bulk_analyze) + int(show_bulk_generate)
+
     with st.container(border=True):
-        n_actions = len(actions) if selected_ids else 0
+        n_actions = (len(actions) + n_special) if selected_ids else 0
         cols = st.columns([3] + [2] * n_actions + [2])
 
         with cols[0]:
@@ -423,10 +449,61 @@ def render_bulk_actions(items: list[dict], selected_ids: set[int]) -> None:
             )
             st.markdown(label)
 
-        for i, (label, to_status) in enumerate(actions):
+        col_idx = 1
+
+        if selected_ids and show_bulk_analyze:
+            with cols[col_idx]:
+                if st.button(
+                    "일괄 분석",
+                    key="bulk_analyze",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    tasks = [
+                        (cid, functools.partial(analyze_content, base_url, cid, content_type))
+                        for cid in selected_ids
+                    ]
+                    with st.spinner(f"{len(tasks)}개 항목 분석 중..."):
+                        errors = _run_bulk_concurrent(tasks)
+                    fetch_contents.clear()
+                    _deselect_all()
+                    st.session_state.last_error = "\n".join(errors) if errors else None
+                    st.rerun()
+            col_idx += 1
+
+        if selected_ids and show_bulk_generate:
+            with cols[col_idx]:
+                if st.button(
+                    "일괄 이미지 생성",
+                    key="bulk_generate_image",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    tasks = [
+                        (
+                            cid,
+                            functools.partial(
+                                generate_image,
+                                base_url,
+                                cid,
+                                content_type,
+                                st.session_state.get(f"gen_model_{cid}", ALL_MODELS[0]),
+                            ),
+                        )
+                        for cid in selected_ids
+                    ]
+                    with st.spinner(f"{len(tasks)}개 항목 이미지 생성 중..."):
+                        errors = _run_bulk_concurrent(tasks)
+                    fetch_contents.clear()
+                    _deselect_all()
+                    st.session_state.last_error = "\n".join(errors) if errors else None
+                    st.rerun()
+            col_idx += 1
+
+        for label, to_status in actions:
             if not selected_ids:
                 break
-            with cols[i + 1]:
+            with cols[col_idx]:
                 btn_type = "primary" if to_status == "approved" else "secondary"
                 if st.button(
                     label,
@@ -444,6 +521,7 @@ def render_bulk_actions(items: list[dict], selected_ids: set[int]) -> None:
                     _deselect_all()
                     st.session_state.last_error = "\n".join(errors) if errors else None
                     st.rerun()
+            col_idx += 1
 
         with cols[-1]:
             select_label = "전체 해제" if all_selected else "전체 선택"
@@ -489,6 +567,17 @@ def render_pagination(
 
 
 # ── Card ──────────────────────────────────────────────────────────────────────
+
+_STAGE_RANK = {"raw": 0, "analyzed": 1, "pending": 2, "approved": 3}
+
+
+def _backward_options(status: str) -> list[str]:
+    if status == "rejected":
+        return ["raw", "analyzed", "pending"]
+    rank = _STAGE_RANK.get(status)
+    if rank is None:  # "used" — no backward move allowed
+        return []
+    return [s for s in ("raw", "analyzed", "pending", "approved") if _STAGE_RANK[s] < rank]
 
 
 def render_action_buttons(item: dict) -> None:
@@ -572,25 +661,31 @@ def render_action_buttons(item: dict) -> None:
                 do_status("rejected")
 
     elif status == "approved":
-        col1, col2, *_ = st.columns(6)
+        col1, *_ = st.columns(6)
         with col1:
-            if st.button(
-                "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
-            ):
-                do_status("pending")
-        with col2:
             if st.button(
                 "Reject", key=f"reject_{content_id}", use_container_width=True
             ):
                 do_status("rejected")
 
-    elif status == "rejected":
-        col1, *_ = st.columns(6)
-        with col1:
+    backward_options = _backward_options(status)
+    if backward_options:
+        st.caption("이전 단계로 되돌리기")
+        col_sel, col_btn = st.columns([3, 1])
+        with col_sel:
+            target = st.selectbox(
+                "되돌릴 상태",
+                backward_options,
+                key=f"backward_target_{content_id}",
+                label_visibility="collapsed",
+            )
+        with col_btn:
             if st.button(
-                "Reset to Pending", key=f"reset_{content_id}", use_container_width=True
+                "되돌리기",
+                key=f"backward_btn_{content_id}",
+                use_container_width=True,
             ):
-                do_status("pending")
+                do_status(target)
 
 
 def render_image_regenerate_expander(item: dict) -> None:
