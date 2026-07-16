@@ -10,7 +10,7 @@ services:
     environment:
       - TZ=Asia/Seoul
     volumes:
-      - ~/meow-content/images:/code/app/images
+      - ./images:/code/app/images
     networks:
       - meow-network
 
