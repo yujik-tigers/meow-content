@@ -4,26 +4,12 @@ from app.enums import ContentType, LiteralType
 from app.scrap.wikiquote_movie_scraper import (
     WikiquoteMovieScraper,
     _dialogue_index,
-    _extract_existing_films,
     _extract_quote_candidates,
     _parse_speaker_bullet,
     _sections,
     _strip_emphasis,
     _strip_refs_and_links,
 )
-
-_MAIN_PAGE_WIKITEXT = "Intro text [[List of films (A–C)]] more text"
-
-_SUBPAGE_WIKITEXT = """
-==Existing==
-===#===
-{{Col-begin}}
-{{Col-3}}
-*''[[Test Film]]''
-==Requested==
-===#===
-* ''[[Ghost Film]]''
-"""
 
 _FILM_WIKITEXT = """
 ==Rick==
@@ -48,17 +34,16 @@ def _mock_response(payload: dict) -> MagicMock:
     return response
 
 
-async def test_scrape_happy_path() -> None:
-    """메인 목록 → 하위 목록 → 영화 페이지 순으로 파싱해 Dialogue 이전 캐릭터 헤딩의 대사만 LiteralQuote NewContent로 만든다."""
-    responses = [
-        _mock_response({"parse": {"wikitext": _MAIN_PAGE_WIKITEXT}}),
-        _mock_response({"parse": {"wikitext": _SUBPAGE_WIKITEXT}}),
-        _mock_response({"parse": {"wikitext": _FILM_WIKITEXT}}),
-    ]
+async def test_scrape_happy_path(mocker) -> None:
+    """큐레이션된 인기 영화 목록에서 고른 영화 페이지를 파싱해 Dialogue 이전 캐릭터 헤딩의 대사만 LiteralQuote NewContent로 만든다."""
+    mocker.patch(
+        "app.scrap.wikiquote_movie_scraper.random.choice",
+        return_value="Casablanca",
+    )
 
     with patch("app.scrap.wikiquote_movie_scraper.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value.__aenter__.return_value.get = AsyncMock(
-            side_effect=responses
+            return_value=_mock_response({"parse": {"wikitext": _FILM_WIKITEXT}})
         )
         result = await WikiquoteMovieScraper().scrape()
 
@@ -66,13 +51,13 @@ async def test_scrape_happy_path() -> None:
     item = result[0]
     assert item.type == ContentType.LiteralQuote
     assert item.literal_type == LiteralType.MOVIE
-    assert item.title == "Test Film"
+    assert item.title == "Casablanca"
     assert item.content == "Here's looking at you, kid, this line is definitely long enough."
     assert item.author == "Rick"
 
 
-async def test_scrape_returns_empty_when_main_page_errors() -> None:
-    """메인 목록 페이지 조회가 MediaWiki 'error'를 반환하면 빈 리스트를 반환한다."""
+async def test_scrape_returns_empty_when_film_page_errors() -> None:
+    """선택된 영화 페이지 조회가 MediaWiki 'error'를 반환하면 빈 리스트를 반환한다."""
     with patch("app.scrap.wikiquote_movie_scraper.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value.__aenter__.return_value.get = AsyncMock(
             return_value=_mock_response({"error": {"code": "missingtitle"}})
@@ -85,24 +70,14 @@ async def test_scrape_returns_empty_when_main_page_errors() -> None:
 async def test_scrape_returns_empty_when_film_page_has_no_dialogue_section() -> None:
     """선택된 영화 페이지에 Dialogue 섹션(경계 기준)이 없으면 빈 리스트를 반환한다."""
     no_dialogue_wikitext = "==Cast==\n* Someone\n==Taglines==\n* A tagline\n"
-    responses = [
-        _mock_response({"parse": {"wikitext": _MAIN_PAGE_WIKITEXT}}),
-        _mock_response({"parse": {"wikitext": _SUBPAGE_WIKITEXT}}),
-        _mock_response({"parse": {"wikitext": no_dialogue_wikitext}}),
-    ]
 
     with patch("app.scrap.wikiquote_movie_scraper.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value.__aenter__.return_value.get = AsyncMock(
-            side_effect=responses
+            return_value=_mock_response({"parse": {"wikitext": no_dialogue_wikitext}})
         )
         result = await WikiquoteMovieScraper().scrape()
 
     assert result == []
-
-
-def test_extract_existing_films_excludes_requested_section() -> None:
-    """==Requested==(빨간 링크) 이후는 제외하고 ==Existing== 구간의 영화 제목만 추출한다."""
-    assert _extract_existing_films(_SUBPAGE_WIKITEXT) == ["Test Film"]
 
 
 def test_dialogue_index_locates_heading_case_insensitively() -> None:

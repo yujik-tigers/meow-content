@@ -1,4 +1,5 @@
 import functools
+import logging
 from collections.abc import Callable, Sequence
 from datetime import date, datetime
 from typing import Any, override
@@ -12,6 +13,9 @@ from app.repository.base import ContentRepository, TokenUsageRepository
 from app.repository.mysql._models import ContentRecord, TokenUsageRecord
 from app.schema.content import Content, NewContent
 from app.schema.usage import UsageAggregate
+
+
+logger = logging.getLogger(__name__)
 
 
 _DAILY_CONTENT_ROTATION: dict[int, ContentType] = {
@@ -69,8 +73,14 @@ class MySQLContentRepository(ContentRepository):
         new_records = []
         for content in contents:
             if content.image_url and content.image_url in existing_urls:
+                logger.info(
+                    "Skipping duplicate content with image_url=%r", content.image_url
+                )
                 continue
             if content.content in existing_contents:
+                logger.info(
+                    "Skipping duplicate content with content=%r", content.content
+                )
                 continue
             new_records.append(self._to_new_record(content))
 
