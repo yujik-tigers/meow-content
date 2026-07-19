@@ -698,6 +698,10 @@ def render_fields(item: dict) -> None:
             st.markdown(f"**팩트:** {item['content']}")
         if item.get("content_translation"):
             st.markdown(f"**번역:** {item['content_translation']}")
+        if item.get("expression"):
+            st.markdown(f"**핵심 표현:** `{item['expression']}`")
+        if item.get("expression_translation"):
+            st.markdown(f"**표현 번역:** {item['expression_translation']}")
         if item.get("background"):
             st.markdown(f"**배경:** {item['background']}")
 

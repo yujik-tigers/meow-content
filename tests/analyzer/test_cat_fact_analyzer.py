@@ -28,6 +28,8 @@ async def test_analyze_raw_content() -> None:
     raw_fact_content = _raw_fact_content()
     mock_result = CatFactAnalyzeResult(
         fact_translation="고양이는 앞발에 발가락이 다섯 개 있다.",
+        expression="have five toes",
+        expression_translation="발가락이 다섯 개 있다",
         background="고양이의 앞발과 뒷발은 발가락 수가 다르다는 점이 흥미롭다.",
     )
 
@@ -39,5 +41,7 @@ async def test_analyze_raw_content() -> None:
 
     assert result.content == raw_fact_content.content
     assert result.content_translation == mock_result.fact_translation
+    assert result.expression == mock_result.expression
+    assert result.expression_translation == mock_result.expression_translation
     assert result.background == mock_result.background
     assert result.status == ContentStatus.ANALYZED

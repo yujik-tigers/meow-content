@@ -16,6 +16,12 @@ from app.schema.content import Content
 
 class CatFactAnalyzeResult(BaseModel):
     fact_translation: str = Field(description="Korean translation of the full fact")
+    expression: str = Field(
+        description="A useful English word, phrase, idiom, or collocation extracted from the fact — something a Korean learner can actually use in real conversation"
+    )
+    expression_translation: str = Field(
+        description="Korean translation of the extracted expression"
+    )
     background: str = Field(
         description="Brief Korean explanation adding context or color to the fact — why it's true, or what makes it interesting"
     )
@@ -31,14 +37,21 @@ class CatFactAnalyzer(ContentAnalyzer):
     @override
     async def analyze_raw_content(self, content: Content) -> Content:
         system_prompt_template = SystemMessagePromptTemplate.from_template("""
-        You are a Korean-language assistant that prepares fun cat facts for a daily cat-content mailing list.
+        You are an English language education assistant that prepares fun cat facts for Korean learners.
+        Your job is to surface one expression from the fact that is genuinely worth learning.
 
-        Your job is to:
+        Guidelines for choosing the expression:
+        - Pick a word, phrase, idiom, or collocation that is genuinely useful — avoid overly basic words a beginner already knows (e.g. "good", "big", "go")
+        - Prioritize expressions that native speakers use naturally in everyday conversation or writing
+        - Good candidates: multi-word phrases ("fall into place"), idiomatic verb phrases ("give up on"), fixed collocations ("make a difference"), or notable grammatical patterns worth imitating
+
+        Also:
         - Translate the fact naturally and accurately into Korean
+        - Provide accurate, natural-sounding Korean translations
         - Provide a brief Korean explanation of the context behind the fact — why it's true or what makes it interesting — keep it concise
         """)
         human_prompt_template = HumanMessagePromptTemplate.from_template(
-            'Fact: "{fact}"\n\nTranslate this fact and provide brief background context.'
+            'Fact: "{fact}"\n\nAnalyze this fact and extract one English expression for language learning.'
         )
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -55,6 +68,8 @@ class CatFactAnalyzer(ContentAnalyzer):
         return replace(
             content,
             content_translation=analysis_result.fact_translation,
+            expression=analysis_result.expression,
+            expression_translation=analysis_result.expression_translation,
             background=analysis_result.background,
             status=ContentStatus.ANALYZED,
         )
