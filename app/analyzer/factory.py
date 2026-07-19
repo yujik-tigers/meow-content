@@ -1,5 +1,6 @@
 from app.analyzer.base import ContentAnalyzer
 from app.analyzer.daily_quote_analyzer import daily_quote_analyzer
+from app.analyzer.literal_quote_analyzer import literal_quote_analyzer
 from app.analyzer.meme_analyzer import reddit_meme_analyzer
 from app.enums import ContentType
 
@@ -11,5 +12,7 @@ class AnalyzerFactory:
             return reddit_meme_analyzer
         if content_type == ContentType.QUOTE:
             return daily_quote_analyzer
+        if content_type == ContentType.LiteralQuote:
+            return literal_quote_analyzer
 
         raise ValueError(f"Unsupported content type to analyze: {content_type}")

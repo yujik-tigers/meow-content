@@ -54,6 +54,7 @@ class NewContent:
     image_url: str | None = None
     author: str | None = None
     title: str | None = None
+    literal_type: LiteralType | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

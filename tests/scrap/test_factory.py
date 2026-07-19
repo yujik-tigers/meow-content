@@ -4,6 +4,7 @@ from app.enums import ContentType
 from app.scrap.daily_quote_scraper import daily_quote_scraper
 from app.scrap.factory import ScraperFactory
 from app.scrap.reddit_meme_scraper import reddit_meme_scraper
+from app.scrap.wikiquote_movie_scraper import wikiquote_movie_scraper
 
 
 def test_get_scraper_for_reddit_meme() -> None:
@@ -14,6 +15,14 @@ def test_get_scraper_for_reddit_meme() -> None:
 def test_get_scraper_for_quote() -> None:
     """quote 타입 요청 시 DailyQuoteScraper 싱글턴을 반환한다."""
     assert ScraperFactory.get_scraper(ContentType.QUOTE) is daily_quote_scraper
+
+
+def test_get_scraper_for_literal_quote() -> None:
+    """literal_quote 타입 요청 시 WikiquoteMovieScraper 싱글턴을 반환한다."""
+    assert (
+        ScraperFactory.get_scraper(ContentType.LiteralQuote)
+        is wikiquote_movie_scraper
+    )
 
 
 def test_get_scraper_raises_for_unsupported_content_type() -> None:

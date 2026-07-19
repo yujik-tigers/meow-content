@@ -1,7 +1,9 @@
+from datetime import date
+
 import pytest
 
-from app.enums import ContentStatus, ContentType
-from app.exceptions import ContentNotFoundError
+from app.enums import ContentStatus, ContentType, LiteralType
+from app.exceptions import ContentNotFoundError, NoApprovedContentError
 from app.repository.mysql.repository import MySQLContentRepository
 from app.schema.content import NewContent
 
@@ -114,3 +116,120 @@ async def test_update_status_rolls_back_for_missing_content(content_repository) 
         ContentStatus.RAW, ContentType.QUOTE, 0, 10
     )
     assert contents == []
+
+
+async def test_create_contents_persists_literal_type(content_repository) -> None:
+    """literal_quote 콘텐츠는 literal_type이 함께 저장·조회된다."""
+    await content_repository.create_contents(
+        [
+            NewContent(
+                type=ContentType.LiteralQuote,
+                content="Here's looking at you, kid.",
+                author="Rick",
+                title="Casablanca",
+                literal_type=LiteralType.MOVIE,
+            ),
+        ]
+    )
+
+    literal_quotes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.LiteralQuote, 0, 10
+    )
+    assert len(literal_quotes) == 1
+    assert literal_quotes[0].title == "Casablanca"
+    assert literal_quotes[0].literal_type == LiteralType.MOVIE
+
+
+async def test_create_contents_dedups_literal_quote_by_text(content_repository) -> None:
+    """literal_quote도 quote와 마찬가지로 동일 텍스트가 중복 저장되지 않는다."""
+    await content_repository.create_contents(
+        [
+            NewContent(
+                type=ContentType.LiteralQuote,
+                content="Known movie quote",
+                author="Rick",
+                title="Casablanca",
+                literal_type=LiteralType.MOVIE,
+            ),
+        ]
+    )
+
+    inserted = await content_repository.create_contents(
+        [
+            NewContent(
+                type=ContentType.LiteralQuote,
+                content="Known movie quote",
+                author="Rick",
+                title="Casablanca",
+                literal_type=LiteralType.MOVIE,
+            ),
+            NewContent(
+                type=ContentType.LiteralQuote,
+                content="Fresh movie quote",
+                author="Ilsa",
+                title="Casablanca",
+                literal_type=LiteralType.MOVIE,
+            ),
+        ]
+    )
+
+    assert inserted == 1
+    literal_quotes = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.LiteralQuote, 0, 10
+    )
+    assert {c.content for c in literal_quotes} == {
+        "Known movie quote",
+        "Fresh movie quote",
+    }
+
+
+async def test_reserve_daily_content_rotates_across_three_types(
+    content_repository,
+) -> None:
+    """day % 3 로테이션에 맞춰 reddit_meme/quote/literal_quote를 순서대로 예약한다."""
+    await content_repository.create_contents(
+        [
+            NewContent(
+                type=ContentType.REDDIT_MEME,
+                image_url="https://i.redd.it/rotation.jpg",
+                author="user1",
+                title="Cat",
+            ),
+            NewContent(type=ContentType.QUOTE, content="Rotation quote", author="A"),
+            NewContent(
+                type=ContentType.LiteralQuote,
+                content="Rotation movie quote",
+                author="Rick",
+                title="Casablanca",
+                literal_type=LiteralType.MOVIE,
+            ),
+        ]
+    )
+    for content_type in (
+        ContentType.REDDIT_MEME,
+        ContentType.QUOTE,
+        ContentType.LiteralQuote,
+    ):
+        raw = await content_repository.fetch_contents_by(
+            ContentStatus.RAW, content_type, 0, 10
+        )
+        await content_repository.update_status(raw[0].id, ContentStatus.APPROVED)
+
+    reddit_meme_day = await content_repository.reserve_daily_content(date(2026, 7, 3))
+    assert reddit_meme_day.type == ContentType.REDDIT_MEME
+
+    quote_day = await content_repository.reserve_daily_content(date(2026, 7, 4))
+    assert quote_day.type == ContentType.QUOTE
+
+    literal_quote_day = await content_repository.reserve_daily_content(
+        date(2026, 7, 5)
+    )
+    assert literal_quote_day.type == ContentType.LiteralQuote
+
+
+async def test_reserve_daily_content_raises_when_bucket_has_no_approved_content(
+    content_repository,
+) -> None:
+    """해당 요일 버킷의 타입에 APPROVED 콘텐츠가 없으면 예외가 발생한다."""
+    with pytest.raises(NoApprovedContentError):
+        await content_repository.reserve_daily_content(date(2026, 7, 3))

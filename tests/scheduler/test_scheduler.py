@@ -6,7 +6,7 @@ import pytest
 from pytest_mock import MockerFixture
 from sqlmodel import select
 
-from app.enums import ContentStatus, ContentType
+from app.enums import ContentStatus, ContentType, LiteralType
 from app.exceptions import NoApprovedContentError
 from app.repository.mysql._models import ContentRecord
 from app.repository.mysql.repository import MySQLContentRepository
@@ -40,6 +40,14 @@ async def _seed_approved_contents(db_session) -> None:
                 type=ContentType.REDDIT_MEME,
                 status=ContentStatus.APPROVED,
                 image_url="https://i.redd.it/cat.jpg",
+            ),
+            ContentRecord(
+                type=ContentType.LiteralQuote,
+                status=ContentStatus.APPROVED,
+                content="Here's looking at you, kid.",
+                author="Rick",
+                title="Casablanca",
+                literal_type=LiteralType.MOVIE,
             ),
         ]
     )

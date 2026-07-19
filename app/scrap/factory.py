@@ -2,6 +2,7 @@ from app.enums import ContentType
 from app.scrap.base import Scraper
 from app.scrap.daily_quote_scraper import daily_quote_scraper
 from app.scrap.reddit_meme_scraper import reddit_meme_scraper
+from app.scrap.wikiquote_movie_scraper import wikiquote_movie_scraper
 
 
 class ScraperFactory:
@@ -11,5 +12,7 @@ class ScraperFactory:
             return reddit_meme_scraper
         if content_type == ContentType.QUOTE:
             return daily_quote_scraper
+        if content_type == ContentType.LiteralQuote:
+            return wikiquote_movie_scraper
 
         raise ValueError(f"Unsupported content type to scrape: {content_type}")

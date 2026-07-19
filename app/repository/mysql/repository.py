@@ -14,6 +14,13 @@ from app.schema.content import Content, NewContent
 from app.schema.usage import UsageAggregate
 
 
+_DAILY_CONTENT_ROTATION: dict[int, ContentType] = {
+    0: ContentType.REDDIT_MEME,
+    1: ContentType.QUOTE,
+    2: ContentType.LiteralQuote,
+}
+
+
 def transactional(fn: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(fn)
     async def wrapper(self, *args: Any, **kwargs: Any) -> Any:
@@ -46,7 +53,9 @@ class MySQLContentRepository(ContentRepository):
             existing_urls = {url for url in result.all() if url}
 
         quote_texts = [
-            c.content for c in contents if c.type == ContentType.QUOTE and c.content
+            c.content
+            for c in contents
+            if c.type in (ContentType.QUOTE, ContentType.LiteralQuote) and c.content
         ]
         existing_contents: set[str] = set()
         if quote_texts:
@@ -118,9 +127,7 @@ class MySQLContentRepository(ContentRepository):
     @override
     @transactional
     async def reserve_daily_content(self, used_at: date) -> Content:
-        content_type = (
-            ContentType.QUOTE if used_at.day % 2 == 1 else ContentType.REDDIT_MEME
-        )
+        content_type = _DAILY_CONTENT_ROTATION[used_at.day % 3]
 
         result = await self._session.exec(
             select(ContentRecord)
@@ -144,6 +151,7 @@ class MySQLContentRepository(ContentRepository):
             image_url=content.image_url,
             author=content.author[:200] if content.author else None,
             title=content.title[:200] if content.title else None,
+            literal_type=content.literal_type,
         )
 
     @staticmethod
