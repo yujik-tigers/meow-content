@@ -2,7 +2,6 @@ import asyncio
 import io
 from pathlib import Path
 
-from PIL import Image as PILImage
 from PIL.Image import Image
 
 from app.image_generator.image_storage import ImageStorage
@@ -37,20 +36,3 @@ class LocalImageStorage(ImageStorage):
         await asyncio.get_running_loop().run_in_executor(None, _write)
 
         return f"{self._base_url}/{image_name}"
-
-    async def download_image(self, image_url: str) -> Image:
-        prefix = f"{self._base_url}/"
-        if not image_url.startswith(prefix):
-            raise ValueError(
-                f"URL is not served from '{self._base_url}': {image_url}"
-            )
-
-        relative_path = image_url[len(prefix) :]
-        path = self._storage_dir / relative_path
-
-        def _read() -> bytes:
-            return path.read_bytes()
-
-        image_bytes = await asyncio.get_running_loop().run_in_executor(None, _read)
-
-        return PILImage.open(io.BytesIO(image_bytes))

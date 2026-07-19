@@ -1,7 +1,6 @@
 import io
 
 import aioboto3
-from PIL import Image as PILImage
 from PIL.Image import Image
 
 from app.image_generator.image_storage import ImageStorage
@@ -42,18 +41,3 @@ class S3ImageStorage(ImageStorage):
             )
 
         return f"https://{self._bucket_name}.s3.{self._region_name}.amazonaws.com/{image_name}"
-
-    async def download_image(self, image_url: str) -> Image:
-        prefix = f"https://{self._bucket_name}.s3.{self._region_name}.amazonaws.com/"
-        if not image_url.startswith(prefix):
-            raise ValueError(
-                f"URL does not belong to bucket '{self._bucket_name}': {image_url}"
-            )
-
-        key = image_url[len(prefix) :]
-
-        async with self._session.client("s3") as s3:  # type: ignore[attr-defined]
-            response = await s3.get_object(Bucket=self._bucket_name, Key=key)
-            body = await response["Body"].read()
-
-        return PILImage.open(io.BytesIO(body))

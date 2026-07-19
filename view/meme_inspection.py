@@ -27,8 +27,6 @@ ALL_MODELS = [
     "gemini-3.1-flash-image",
     "gemini-3-pro-image",
 ]
-ALL_REGENERATE_TYPES = ["modify", "new"]
-REGENERATE_TYPE_LABELS = {"modify": "modify (이전 이미지 기반)", "new": "new (새로 생성)"}
 STATUS_COLORS = {
     "raw": "gray",
     "analyzed": "violet",
@@ -36,18 +34,6 @@ STATUS_COLORS = {
     "approved": "green",
     "rejected": "red",
     "used": "blue",
-}
-REANALYZABLE_FIELDS = [
-    "content_translation",
-    "expression",
-    "expression_translation",
-    "background",
-]
-REANALYZABLE_FIELD_LABELS = {
-    "content_translation": "번역",
-    "expression": "핵심 표현",
-    "expression_translation": "표현 번역",
-    "background": "배경",
 }
 
 
@@ -208,46 +194,10 @@ def update_status(
     resp.raise_for_status()
 
 
-def reanalyze_fields(
-    base_url: str,
-    content_id: int,
-    content_type: str,
-    fields: list[dict],
-) -> None:
-    resp = requests.patch(
-        f"{base_url}/api/v1/admin/contents/{content_id}",
-        json={"request": fields, "content_type": content_type},
-        timeout=180,
-    )
-    resp.raise_for_status()
-
-
 def generate_image(base_url: str, content_id: int, content_type: str, model: str) -> dict:
     resp = requests.post(
         f"{base_url}/api/v1/admin/contents/{content_id}/image",
         json={"model": model, "content_type": content_type},
-        timeout=180,
-    )
-    resp.raise_for_status()
-    return resp.json().get("content", {})
-
-
-def regenerate_image(
-    base_url: str,
-    content_id: int,
-    content_type: str,
-    model: str,
-    prompt: str,
-    regenerate_type: str,
-) -> dict:
-    resp = requests.post(
-        f"{base_url}/api/v1/admin/contents/{content_id}/image/regenerate",
-        json={
-            "model": model,
-            "content_type": content_type,
-            "prompt": prompt,
-            "regenerate_type": regenerate_type,
-        },
         timeout=180,
     )
     resp.raise_for_status()
@@ -688,99 +638,6 @@ def render_action_buttons(item: dict) -> None:
                 do_status(target)
 
 
-def render_image_regenerate_expander(item: dict) -> None:
-    if item["status"] != "pending":
-        return
-
-    content_id = item["id"]
-    content_type = item["type"]
-    base_url = st.session_state.base_url
-    is_reddit_meme = content_type == "reddit_meme"
-
-    with st.expander("이미지 재생성"):
-        if is_reddit_meme:
-            st.info("reddit_meme은 이미지 재생성을 지원하지 않습니다.")
-        else:
-            col_model, col_type = st.columns(2)
-            with col_model:
-                regen_model = st.selectbox(
-                    "모델",
-                    ALL_MODELS,
-                    key=f"regen_model_{content_id}",
-                )
-            with col_type:
-                regen_type = st.selectbox(
-                    "재생성 타입",
-                    ALL_REGENERATE_TYPES,
-                    key=f"regen_type_{content_id}",
-                    format_func=lambda t: REGENERATE_TYPE_LABELS[t],
-                )
-            prompt = st.text_input(
-                "재생성 프롬프트",
-                key=f"regen_prompt_{content_id}",
-                placeholder="이미지 재생성 방향 입력",
-            )
-            if st.button(
-                "이미지 재생성",
-                key=f"regen_image_{content_id}",
-                type="primary",
-                disabled=not prompt,
-            ):
-                try:
-                    regenerate_image(
-                        base_url, content_id, content_type, regen_model, prompt, regen_type
-                    )
-                    st.session_state.last_error = None
-                    fetch_contents.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"이미지 재생성 실패: {e}")
-
-
-def render_reanalyze_expander(item: dict) -> None:
-    if item["status"] == "raw":
-        return
-
-    content_id = item["id"]
-    content_type = item["type"]
-    base_url = st.session_state.base_url
-
-    with st.expander("필드 재분석"):
-        selected_fields = []
-        for field in REANALYZABLE_FIELDS:
-            col_check, col_label, col_input = st.columns([1, 2, 5])
-            with col_check:
-                checked = st.checkbox(
-                    "", key=f"chk_{content_id}_{field}", label_visibility="collapsed"
-                )
-            with col_label:
-                st.markdown(f"`{field}` ({REANALYZABLE_FIELD_LABELS[field]})")
-            with col_input:
-                guide = st.text_input(
-                    "프롬프트 가이드",
-                    key=f"pg_{content_id}_{field}",
-                    label_visibility="collapsed",
-                    placeholder="재분석 방향 가이드 (선택)",
-                    disabled=not checked,
-                )
-            if checked:
-                selected_fields.append({"field_name": field, "prompt_guide": guide})
-
-        if st.button(
-            "재분석",
-            key=f"reanalyze_{content_id}",
-            type="primary",
-            disabled=not selected_fields,
-        ):
-            try:
-                reanalyze_fields(base_url, content_id, content_type, selected_fields)
-                st.session_state.last_error = None
-                fetch_contents.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"재분석 실패: {e}")
-
-
 def render_fields(item: dict) -> None:
     content_type = item.get("type", "")
 
@@ -880,8 +737,6 @@ def render_card(item: dict) -> None:
 
         st.divider()
         render_action_buttons(item)
-        render_image_regenerate_expander(item)
-        render_reanalyze_expander(item)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

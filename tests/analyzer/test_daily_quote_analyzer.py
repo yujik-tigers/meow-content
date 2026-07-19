@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,7 +6,7 @@ from langchain_core.runnables import RunnableLambda
 
 from app.analyzer.daily_quote_analyzer import DailyQuoteAnalyzer, QuoteAnalyzeResult
 from app.enums import ContentStatus, ContentType
-from app.schema.content import Content, ReanalyzeContentField
+from app.schema.content import Content
 
 
 @pytest.fixture
@@ -49,37 +48,4 @@ async def test_analyze_raw_content(
     assert result.expression == mock_result.expression
     assert result.expression_translation == mock_result.expression_translation
     assert result.background == mock_result.background
-    assert result.status == ContentStatus.ANALYZED
-
-
-async def test_reanalyze_content_field(
-    quote_analyzer: DailyQuoteAnalyzer, raw_quote_content: Content
-) -> None:
-    """요청한 필드만 프롬프트 가이드에 따라 재분석되어 갱신된다."""
-    new_translation = "새로운 명언 번역"
-    new_expression = "make a difference"
-
-    def fake_result(_: Any) -> MagicMock:
-        mock = MagicMock()
-        mock.model_dump.return_value = {
-            "quote_translation": new_translation,
-            "expression": new_expression,
-        }
-        return mock
-
-    mock_llm = MagicMock()
-    mock_llm.with_structured_output.return_value = RunnableLambda(fake_result)
-    quote_analyzer._llm = mock_llm
-
-    fields = [
-        ReanalyzeContentField(
-            field_name="content_translation", prompt_guide="구어체로"
-        ),
-        ReanalyzeContentField(field_name="expression", prompt_guide="자연스럽게"),
-    ]
-    result = await quote_analyzer.reanalyze_content_field(raw_quote_content, fields)
-
-    assert result.content_translation == new_translation
-    assert result.expression == new_expression
-    assert result.content == raw_quote_content.content
     assert result.status == ContentStatus.ANALYZED

@@ -7,7 +7,6 @@ from app.enums import (
     GptImageModel,
     LiteralType,
     NanoBananaModel,
-    RegenerateType,
 )
 
 
@@ -58,23 +57,9 @@ class NewContent:
 
 
 @dataclass(frozen=True, kw_only=True)
-class ReanalyzeContentField:
-    field_name: str
-    prompt_guide: str
-
-
-@dataclass(frozen=True, kw_only=True)
 class GenerateImageRequest:
     model: GptImageModel | NanoBananaModel
     content_type: ContentType
-
-
-@dataclass(frozen=True, kw_only=True)
-class RegenerateImageRequest:
-    prompt: str
-    regenerate_type: RegenerateType
-    content_type: ContentType
-    model: GptImageModel | NanoBananaModel
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -50,19 +50,3 @@ async def test_upload_unsupported_format_raises(storage):
 
     with pytest.raises(ValueError, match="Unsupported image format"):
         await storage.upload_image(img, "image.bmp")
-
-
-async def test_download_image_returns_pil_image(storage):
-    """업로드했던 이미지를 URL로 다시 내려받아 PIL 이미지로 반환한다."""
-    url = await storage.upload_image(_png_image(), "daily_quote/2024-01-01/1.png")
-
-    result = await storage.download_image(url)
-
-    assert isinstance(result, PILModule.Image)
-
-
-async def test_download_image_non_matching_url_raises(storage):
-    """저장소 base URL과 다른 URL로 다운로드를 요청하면 예외가 발생한다."""
-    bad_url = "https://example.com/image.png"
-    with pytest.raises(ValueError, match="is not served from"):
-        await storage.download_image(bad_url)

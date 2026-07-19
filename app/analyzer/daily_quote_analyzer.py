@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Any, cast, override
+from typing import override
 
 from langchain_core.prompts import (
     ChatPromptTemplate,
@@ -7,11 +7,11 @@ from langchain_core.prompts import (
     SystemMessagePromptTemplate,
 )
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field
 
 from app.analyzer.base import ContentAnalyzer
 from app.enums import ContentStatus
-from app.schema.content import Content, ReanalyzeContentField
+from app.schema.content import Content
 
 
 class QuoteAnalyzeResult(BaseModel):
@@ -75,64 +75,5 @@ class DailyQuoteAnalyzer(ContentAnalyzer):
             background=analysis_result.background,
             status=ContentStatus.ANALYZED,
         )
-
-    @override
-    async def reanalyze_content_field(
-        self,
-        current_content: Content,
-        fields: list[ReanalyzeContentField],
-    ) -> Content:
-        field_defs: dict[str, Any] = {
-            (
-                "quote_translation"
-                if f.field_name == "content_translation"
-                else f.field_name
-            ): (
-                str,
-                Field(description=f.prompt_guide),
-            )
-            for f in fields
-        }
-        dynamic_model = create_model("ReanalyzeResult", **field_defs)
-
-        current_values = "\n".join(
-            [
-                f"- quote: {current_content.content}",
-                f"- quote_translation: {current_content.content_translation}",
-                f"- expression: {current_content.expression}",
-                f"- expression_translation: {current_content.expression_translation}",
-                f"- background: {current_content.background}",
-            ]
-        )
-        fields_instruction = "\n".join(
-            f"- {f.field_name}: {f.prompt_guide}" for f in fields
-        )
-
-        system = SystemMessagePromptTemplate.from_template(
-            "You are re-evaluating specific fields of an already-analyzed quote for Korean English learners. "
-            "Use the quote, author, and current field values as context. "
-            "Follow each field's prompt guide strictly. Only output the requested fields."
-        )
-        human = HumanMessagePromptTemplate.from_template(
-            'Quote: "{quote}"\nAuthor: {author}\n\nCurrent field values:\n{current_values}\n\nFields to re-generate:\n{fields_instruction}'
-        )
-        prompt = ChatPromptTemplate.from_messages([system, human])
-        chain = prompt | self._llm.with_structured_output(dynamic_model)
-
-        result = await chain.ainvoke(
-            {
-                "quote": current_content.content,
-                "author": current_content.author,
-                "current_values": current_values,
-                "fields_instruction": fields_instruction,
-            }
-        )
-
-        updates: dict[str, Any] = {
-            ("content_translation" if k == "quote_translation" else k): v
-            for k, v in cast(BaseModel, result).model_dump().items()
-        }
-        return replace(current_content, **updates, status=ContentStatus.ANALYZED)
-
 
 daily_quote_analyzer = DailyQuoteAnalyzer()

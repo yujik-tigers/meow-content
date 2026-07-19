@@ -36,12 +36,6 @@ def _make_images_response(b64_json: str | None, usage: MagicMock | None = None) 
     return response
 
 
-def _make_previous_image(fmt: str = "PNG") -> PILModule.Image:
-    image = PILModule.new("RGB", (10, 10), "red")
-    image.format = fmt
-    return image
-
-
 @pytest.fixture
 def nano_banana(mocker):
     mocker.patch("app.image_generator.diffusion_model.ChatGoogleGenerativeAI")
@@ -63,25 +57,6 @@ async def test_nano_banana_create_image_parses_image_from_response(nano_banana):
     assert isinstance(result, PILModule.Image)
 
 
-async def test_nano_banana_reinforce_image_parses_image_from_response(nano_banana):
-    """Nano Banana 이미지 보강(reinforce) 응답을 PIL 이미지로 파싱한다."""
-    nano_banana._llm.ainvoke = AsyncMock(return_value=_make_image_response())
-
-    result = await nano_banana.reinforce_image(
-        "make it more vibrant", _make_previous_image()
-    )
-
-    assert isinstance(result, PILModule.Image)
-
-
-async def test_nano_banana_reinforce_image_raises_for_unsupported_format(nano_banana):
-    """지원하지 않는 포맷의 원본 이미지로 보강을 요청하면 예외가 발생한다."""
-    with pytest.raises(ValueError, match="Unsupported image format"):
-        await nano_banana.reinforce_image(
-            "make it more vibrant", _make_previous_image(fmt="WEBP")
-        )
-
-
 async def test_gpt_image2_create_image_parses_image_from_response(gpt_image2):
     """GPT-Image-2 응답의 base64 이미지를 PIL 이미지로 파싱한다."""
     gpt_image2._llm.async_client.images.generate = AsyncMock(
@@ -91,27 +66,6 @@ async def test_gpt_image2_create_image_parses_image_from_response(gpt_image2):
     result = await gpt_image2.create_image("a cat sitting on a couch")
 
     assert isinstance(result, PILModule.Image)
-
-
-async def test_gpt_image2_reinforce_image_parses_image_from_response(gpt_image2):
-    """GPT-Image-2 이미지 보강 응답을 PIL 이미지로 파싱한다."""
-    gpt_image2._llm.async_client.images.edit = AsyncMock(
-        return_value=_make_images_response(_make_image_base64())
-    )
-
-    result = await gpt_image2.reinforce_image(
-        "make it more vibrant", _make_previous_image()
-    )
-
-    assert isinstance(result, PILModule.Image)
-
-
-async def test_gpt_image2_reinforce_image_raises_for_unsupported_format(gpt_image2):
-    """지원하지 않는 포맷의 원본 이미지로 보강을 요청하면 예외가 발생한다."""
-    with pytest.raises(ValueError, match="Unsupported image format"):
-        await gpt_image2.reinforce_image(
-            "make it more vibrant", _make_previous_image(fmt="WEBP")
-        )
 
 
 async def test_gpt_image2_create_image_raises_when_no_image_data(gpt_image2):

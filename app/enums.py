@@ -36,11 +36,6 @@ class GptImageModel(StrEnum):
     GPT_IMAGE_2 = "gpt-image-2-2026-04-21"
 
 
-class RegenerateType(StrEnum):
-    MODIFY = "modify"
-    NEW = "new"
-
-
 class DayOfWeek(StrEnum):
     MON = "mon"
     TUE = "tue"

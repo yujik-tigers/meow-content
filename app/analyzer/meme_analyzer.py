@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Any, NamedTuple, cast
+from typing import cast
 
 from langchain_core.prompts import (
     ChatPromptTemplate,
@@ -7,11 +7,11 @@ from langchain_core.prompts import (
     SystemMessagePromptTemplate,
 )
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field
 
 from app.analyzer.base import ContentAnalyzer
 from app.enums import ContentStatus
-from app.schema.content import Content, ReanalyzeContentField
+from app.schema.content import Content
 
 
 class MemeAnalyzeResult(BaseModel):
@@ -83,92 +83,5 @@ class RedditMemeAnalyzer(ContentAnalyzer):
             background=analysis_result.background,
             status=ContentStatus.PENDING,
         )
-
-    async def reanalyze_content_field(
-        self,
-        current_content: Content,
-        fields: list[ReanalyzeContentField],
-    ) -> Content:
-        field_defs: dict[str, Any] = {
-            _ADMIN_CONTENT_TO_LLM_SCHEMA[f.field_name].llm_field: (
-                str,
-                Field(
-                    description=f"{_ADMIN_CONTENT_TO_LLM_SCHEMA[f.field_name].description}. \nPrompt guide: {f.prompt_guide}"
-                ),
-            )
-            for f in fields
-        }
-        dynamic_model = create_model("ReanalyzeResult", **field_defs)
-
-        current_values = "\n".join(
-            [
-                f"- meme_text: {current_content.content}",
-                f"- meme_text_translation: {current_content.content_translation}",
-                f"- expressions: {current_content.expression}",
-                f"- translation: {current_content.expression_translation}",
-                f"- background: {current_content.background}",
-            ]
-        )
-        fields_instruction = "\n".join(
-            f"- {f.field_name}: {f.prompt_guide}" for f in fields
-        )
-
-        system = SystemMessagePromptTemplate.from_template(
-            "You are re-evaluating specific fields of an already-analyzed meme for Korean English learners. "
-            "Use the meme image and current field values as context. "
-            "Follow each field's prompt guide strictly. Only output the requested fields."
-        )
-        human = HumanMessagePromptTemplate.from_template(
-            [
-                {"type": "image_url", "image_url": {"url": "{img_url}"}},
-                {
-                    "type": "text",
-                    "text": "Current field values:\n{current_values}\n\nFields to re-generate:\n{fields_instruction}",
-                },
-            ]
-        )
-        prompt = ChatPromptTemplate.from_messages([system, human])
-        chain = prompt | self._llm.with_structured_output(dynamic_model)
-
-        result = await chain.ainvoke(
-            {
-                "img_url": current_content.image_url,
-                "current_values": current_values,
-                "fields_instruction": fields_instruction,
-            }
-        )
-
-        updates: dict[str, Any] = {
-            _LLM_SCHEMA_TO_ADMIN_CONTENT[k]: v
-            for k, v in cast(BaseModel, result).model_dump().items()
-        }
-        return replace(current_content, **updates, status=ContentStatus.PENDING)
-
-
-class _LLMFieldSchema(NamedTuple):
-    llm_field: str
-    description: str
-
-
-_ADMIN_CONTENT_TO_LLM_SCHEMA: dict[str, _LLMFieldSchema] = {
-    "content": _LLMFieldSchema("meme_text", "The exact text on the meme"),
-    "content_translation": _LLMFieldSchema(
-        "meme_text_translation", "Korean translation of the meme text"
-    ),
-    "expression": _LLMFieldSchema(
-        "expressions", "Practical English expression extracted from the meme"
-    ),
-    "expression_translation": _LLMFieldSchema(
-        "translation", "Korean translation of the expression"
-    ),
-    "background": _LLMFieldSchema(
-        "background",
-        "Korean explanation of what the meme means and how the expression is used",
-    ),
-}
-
-_LLM_SCHEMA_TO_ADMIN_CONTENT: dict[str, str] = {
-    v[0]: k for k, v in _ADMIN_CONTENT_TO_LLM_SCHEMA.items()
-}
 
 reddit_meme_analyzer = RedditMemeAnalyzer()

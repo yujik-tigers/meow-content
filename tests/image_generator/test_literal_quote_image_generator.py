@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from PIL import Image as PILModule
 
-from app.enums import ContentStatus, ContentType, LiteralType, RegenerateType
+from app.enums import ContentStatus, ContentType, LiteralType
 from app.image_generator.diffusion_model import DiffusionModel
 from app.image_generator.literal_quote_image_generator import (
     LiteralQuoteImageGenerator,
@@ -18,7 +18,6 @@ BUCKET_BASE = (
     f"https://{app_config.AWS_S3_BUCKET_NAME}.s3.{app_config.AWS_REGION}.amazonaws.com"
 )
 TEST_DATE = date(2024, 1, 1)
-TEST_TIMESTAMP = "240101120000"
 
 
 @pytest.fixture
@@ -77,33 +76,6 @@ async def test_generate_updates_image_url_and_status(
     expected_url = (
         f"{BUCKET_BASE}/literal_quote/{TEST_DATE}/{movie_quote_content.id}.png"
     )
-    assert result == replace(
-        movie_quote_content, image_url=expected_url, status=ContentStatus.PENDING
-    )
-
-
-async def test_regenerate_updates_image_url_and_status(
-    generator, mock_model, mock_s3, movie_quote_content, pil_image, mocker
-):
-    """이미지 재생성 시 기존 이미지를 내려받아 보강하고 edited 경로의 image_url로 갱신된다."""
-    mock_s3.download_image.return_value = pil_image
-    mock_model.reinforce_image.return_value = pil_image
-    mocker.patch(
-        "app.image_generator.literal_quote_image_generator.image_text_renderer.add_text",
-        return_value=pil_image,
-    )
-    mock_date = mocker.patch("app.image_generator.literal_quote_image_generator.date")
-    mock_date.today.return_value = TEST_DATE
-    mock_datetime = mocker.patch(
-        "app.image_generator.literal_quote_image_generator.datetime"
-    )
-    mock_datetime.now.return_value.strftime.return_value = TEST_TIMESTAMP
-
-    result = await generator.regenerate(
-        movie_quote_content, "make it darker", RegenerateType.MODIFY
-    )
-
-    expected_url = f"{BUCKET_BASE}/literal_quote/{TEST_DATE}/{movie_quote_content.id}/edited/{TEST_TIMESTAMP}.png"
     assert result == replace(
         movie_quote_content, image_url=expected_url, status=ContentStatus.PENDING
     )

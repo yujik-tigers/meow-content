@@ -1,4 +1,3 @@
-import io
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -38,12 +37,6 @@ def _jpeg_image() -> PILModule.Image:
     return img
 
 
-def _png_bytes() -> bytes:
-    buf = io.BytesIO()
-    PILModule.new("RGB", (10, 10), "green").save(buf, format="PNG")
-    return buf.getvalue()
-
-
 async def test_upload_png_returns_correct_url(s3_client):
     """PNG 업로드 시 올바른 ContentType·Key로 저장하고 공개 URL을 반환한다."""
     mock_s3 = _setup_mock_s3(s3_client)
@@ -78,33 +71,3 @@ async def test_upload_unsupported_format_raises(s3_client):
 
     with pytest.raises(ValueError, match="Unsupported image format"):
         await s3_client.upload_image(img, "image.bmp")
-
-
-async def test_download_image_returns_pil_image(s3_client):
-    """S3 URL의 이미지를 내려받아 PIL 이미지로 반환한다."""
-    mock_s3 = _setup_mock_s3(s3_client)
-    mock_body = AsyncMock()
-    mock_body.read.return_value = _png_bytes()
-    mock_s3.get_object.return_value = {"Body": mock_body}
-
-    url = f"{BASE_URL}/daily_quote/2024-01-01/1.png"
-    result = await s3_client.download_image(url)
-
-    assert isinstance(result, PILModule.Image)
-    mock_s3.get_object.assert_called_once_with(
-        Bucket=BUCKET, Key="daily_quote/2024-01-01/1.png"
-    )
-
-
-async def test_download_image_wrong_bucket_url_raises(s3_client):
-    """다른 버킷의 URL로 다운로드를 요청하면 예외가 발생한다."""
-    bad_url = "https://other-bucket.s3.us-east-1.amazonaws.com/image.png"
-    with pytest.raises(ValueError, match="does not belong to bucket"):
-        await s3_client.download_image(bad_url)
-
-
-async def test_download_image_non_s3_url_raises(s3_client):
-    """S3가 아닌 URL로 다운로드를 요청하면 예외가 발생한다."""
-    bad_url = "https://example.com/image.png"
-    with pytest.raises(ValueError, match="does not belong to bucket"):
-        await s3_client.download_image(bad_url)

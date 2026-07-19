@@ -1,4 +1,3 @@
-import dataclasses
 from datetime import datetime
 from unittest.mock import AsyncMock
 
@@ -6,9 +5,9 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import select
 
-from app.enums import ContentStatus, ContentType, RegenerateType
+from app.enums import ContentStatus, ContentType
 from app.repository.mysql._models import ContentRecord, TokenUsageRecord
-from app.schema.content import NewContent, ReanalyzeContentField
+from app.schema.content import NewContent
 
 
 async def _seed_content(db_session, **kwargs) -> ContentRecord:
@@ -55,65 +54,6 @@ async def test_generate_image_content_not_found(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/admin/contents/999/image",
         json={"model": "gpt-image-2-2026-04-21", "content_type": "quote"},
-    )
-
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Content not found: 999"
-
-
-async def test_regenerate_image_for_content(
-    client: AsyncClient,
-    db_session,
-    mock_image_generator: AsyncMock,
-    make_content,
-) -> None:
-    """이미지 재생성 요청 시 프롬프트가 생성기에 전달되고 결과가 DB에 반영된다."""
-    prompt = "make it more vibrant"
-    record = await _seed_content(
-        db_session,
-        type=ContentType.QUOTE,
-        status=ContentStatus.PENDING,
-        content="quote",
-        image_url="https://s3.example.com/old.jpg",
-    )
-    mock_image_generator.regenerate.return_value = make_content(
-        id=record.id,
-        type=ContentType.QUOTE,
-        status=ContentStatus.PENDING,
-        image_url="https://s3.example.com/regen.jpg",
-    )
-
-    response = await client.post(
-        f"/api/v1/admin/contents/{record.id}/image/regenerate",
-        json={
-            "prompt": prompt,
-            "regenerate_type": "modify",
-            "content_type": "quote",
-            "model": "gpt-image-2-2026-04-21",
-        },
-    )
-
-    assert response.status_code == 200
-    called_content, called_prompt, called_type = (
-        mock_image_generator.regenerate.call_args.args
-    )
-    assert called_content.id == record.id
-    assert called_prompt == prompt
-    assert called_type == RegenerateType.MODIFY
-    await db_session.refresh(record)
-    assert record.image_url == "https://s3.example.com/regen.jpg"
-
-
-async def test_regenerate_image_content_not_found(client: AsyncClient) -> None:
-    """존재하지 않는 콘텐츠의 이미지 재생성 요청은 404를 반환한다."""
-    response = await client.post(
-        "/api/v1/admin/contents/999/image/regenerate",
-        json={
-            "prompt": "test",
-            "regenerate_type": "modify",
-            "content_type": "quote",
-            "model": "gpt-image-2-2026-04-21",
-        },
     )
 
     assert response.status_code == 404
@@ -313,61 +253,6 @@ async def test_update_status_invalid_transition(client: AsyncClient) -> None:
         response.json()["detail"][0]["msg"]
         == "Value error, Cannot transition to approved from raw: from_status must be PENDING"
     )
-
-
-async def test_reanalyze_fields(
-    client: AsyncClient,
-    db_session,
-    mock_analyzer: AsyncMock,
-    make_content,
-) -> None:
-    """특정 필드 재분석 요청 시 재분석 결과가 DB에 반영된다."""
-    record = await _seed_content(
-        db_session,
-        type=ContentType.QUOTE,
-        status=ContentStatus.PENDING,
-        content="quote",
-        content_translation="이전 번역",
-    )
-    request = [
-        ReanalyzeContentField(field_name="content_translation", prompt_guide="formal")
-    ]
-    mock_analyzer.reanalyze_content_field.return_value = make_content(
-        id=record.id,
-        type=ContentType.QUOTE,
-        status=ContentStatus.PENDING,
-        content_translation="새 번역",
-    )
-
-    response = await client.patch(
-        f"/api/v1/admin/contents/{record.id}",
-        json={
-            "request": [dataclasses.asdict(item) for item in request],
-            "content_type": "quote",
-        },
-    )
-
-    assert response.status_code == 204
-    called_content, called_request = (
-        mock_analyzer.reanalyze_content_field.call_args.args
-    )
-    assert called_content.id == record.id
-    assert called_request == request
-    await db_session.refresh(record)
-    assert record.content_translation == "새 번역"
-
-
-async def test_reanalyze_fields_not_found(client: AsyncClient) -> None:
-    """존재하지 않는 콘텐츠의 재분석 요청은 404를 반환한다."""
-    response = await client.patch(
-        "/api/v1/admin/contents/999",
-        json={
-            "request": [{"field_name": "content_translation", "prompt_guide": ""}],
-            "content_type": "quote",
-        },
-    )
-
-    assert response.status_code == 404
 
 
 async def test_trigger_scraping(

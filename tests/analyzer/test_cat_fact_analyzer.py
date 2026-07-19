@@ -1,12 +1,11 @@
 from datetime import datetime
-from typing import Any
 from unittest.mock import MagicMock
 
 from langchain_core.runnables import RunnableLambda
 
 from app.analyzer.cat_fact_analyzer import CatFactAnalyzeResult, CatFactAnalyzer
 from app.enums import ContentStatus, ContentType
-from app.schema.content import Content, ReanalyzeContentField
+from app.schema.content import Content
 
 
 def _fact_analyzer() -> CatFactAnalyzer:
@@ -41,35 +40,4 @@ async def test_analyze_raw_content() -> None:
     assert result.content == raw_fact_content.content
     assert result.content_translation == mock_result.fact_translation
     assert result.background == mock_result.background
-    assert result.status == ContentStatus.ANALYZED
-
-
-async def test_reanalyze_content_field() -> None:
-    """요청한 필드만 프롬프트 가이드에 따라 재분석되어 갱신된다."""
-    fact_analyzer = _fact_analyzer()
-    raw_fact_content = _raw_fact_content()
-    new_translation = "새로운 팩트 번역"
-    new_background = "새로운 배경 설명"
-
-    def fake_result(_: Any) -> MagicMock:
-        mock = MagicMock()
-        mock.model_dump.return_value = {
-            "fact_translation": new_translation,
-            "background": new_background,
-        }
-        return mock
-
-    mock_llm = MagicMock()
-    mock_llm.with_structured_output.return_value = RunnableLambda(fake_result)
-    fact_analyzer._llm = mock_llm
-
-    fields = [
-        ReanalyzeContentField(field_name="content_translation", prompt_guide="구어체로"),
-        ReanalyzeContentField(field_name="background", prompt_guide="간결하게"),
-    ]
-    result = await fact_analyzer.reanalyze_content_field(raw_fact_content, fields)
-
-    assert result.content_translation == new_translation
-    assert result.background == new_background
-    assert result.content == raw_fact_content.content
     assert result.status == ContentStatus.ANALYZED

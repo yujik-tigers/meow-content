@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Any, override
 
-from langchain.messages import AIMessage, HumanMessage, SystemMessage
+from langchain.messages import AIMessage
 from langchain_core.callbacks.manager import (
     AsyncCallbackManagerForLLMRun,
     CallbackManagerForLLMRun,
@@ -27,34 +27,11 @@ logger = logging.getLogger(__name__)
 
 class DiffusionModel(ABC):
 
-    _REINFORCE_SYSTEM_PROMPT = (
-        "You are an image editing assistant. Edit the provided image according to "
-        "the user's instructions and return only the edited image."
-    )
-
     @abstractmethod
     async def create_image(
         self,
         prompt: str,
     ) -> Image: ...
-
-    @abstractmethod
-    async def reinforce_image(self, prompt: str, previous_image: Image) -> Image: ...
-
-    def _image_to_base64(self, image: Image) -> tuple[str, str]:
-        fmt = image.format
-        assert fmt is not None, "Image must have a format"
-
-        if fmt == "PNG":
-            mime = "image/png"
-        elif fmt == "JPEG":
-            mime = "image/jpeg"
-        else:
-            raise ValueError(f"Unsupported image format: {fmt}")
-
-        buffer = BytesIO()
-        image.save(buffer, format=fmt)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8"), mime
 
     def _parse_image_from_response(self, response: AIMessage) -> Image:
         image = next(
@@ -83,31 +60,6 @@ class NanoBanana(DiffusionModel):
         result = await self._llm.ainvoke(prompt)
         return self._parse_image_from_response(result)
 
-    @override
-    async def reinforce_image(
-        self,
-        prompt: str,
-        previous_image: Image,
-    ) -> Image:
-        image_base64, mime = self._image_to_base64(previous_image)
-        result = await self._llm.ainvoke(
-            [
-                SystemMessage(self._REINFORCE_SYSTEM_PROMPT),
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image",
-                            "base64": image_base64,
-                            "mime_type": mime,
-                        },
-                    ]
-                ),
-            ]
-        )
-
-        return self._parse_image_from_response(result)
-
 
 class GptImage2(DiffusionModel):
 
@@ -120,31 +72,6 @@ class GptImage2(DiffusionModel):
         prompt: str,
     ) -> Image:
         result = await self._llm.ainvoke(prompt)
-
-        return self._parse_image_from_response(result)
-
-    @override
-    async def reinforce_image(
-        self,
-        prompt: str,
-        previous_image: Image,
-    ) -> Image:
-        image_base64, mime = self._image_to_base64(previous_image)
-
-        result = await self._llm.ainvoke(
-            [
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image",
-                            "base64": image_base64,
-                            "mime_type": mime,
-                        },
-                    ]
-                ),
-            ]
-        )
 
         return self._parse_image_from_response(result)
 
@@ -187,16 +114,11 @@ class _GptImage2ChatModel(BaseChatModel):
         run_manager: AsyncCallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
-        prompt, image = self._extract_prompt_and_image(messages)
+        prompt = self._extract_prompt(messages)
 
-        if image is not None:
-            response = await self.async_client.images.edit(
-                model=self.model, image=self._image_to_file(*image), prompt=prompt
-            )
-        else:
-            response = await self.async_client.images.generate(
-                model=self.model, prompt=prompt
-            )
+        response = await self.async_client.images.generate(
+            model=self.model, prompt=prompt
+        )
 
         return ChatResult(
             generations=[
@@ -204,12 +126,8 @@ class _GptImage2ChatModel(BaseChatModel):
             ]
         )
 
-    def _extract_prompt_and_image(
-        self,
-        messages: list[BaseMessage],
-    ) -> tuple[str, tuple[str, str] | None]:
+    def _extract_prompt(self, messages: list[BaseMessage]) -> str:
         prompt_parts: list[str] = []
-        image: tuple[str, str] | None = None
 
         for message in messages:
             content = message.content
@@ -218,17 +136,10 @@ class _GptImage2ChatModel(BaseChatModel):
                 continue
 
             for block in content:
-                if not isinstance(block, dict):
-                    continue
-                if block["type"] == "text":
+                if isinstance(block, dict) and block["type"] == "text":
                     prompt_parts.append(block["text"])
-                elif block["type"] == "image":
-                    image = (block["base64"], block["mime_type"])
 
-        return "\n".join(prompt_parts), image
-
-    def _image_to_file(self, image_base64: str, mime: str) -> tuple[str, BytesIO, str]:
-        return "image", BytesIO(base64.b64decode(image_base64)), mime
+        return "\n".join(prompt_parts)
 
     def _images_response_to_ai_message(self, response: ImagesResponse) -> AIMessage:
         if not response.data or not response.data[0].b64_json:
