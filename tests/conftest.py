@@ -32,9 +32,8 @@ os.environ.setdefault("AWS_ACCESS_KEY_ID", "test-access-key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test-secret-key")
 os.environ.setdefault("AWS_REGION", "us-east-1")
 os.environ.setdefault("AWS_S3_BUCKET_NAME", "test-bucket")
-TEST_IMAGE_STORAGE_DIR = os.environ.setdefault(
-    "IMAGE_STORAGE_DIR", "/tmp/meow-content-test-images"
-)
+TEST_IMAGE_STORAGE_DIR = "/tmp/meow-content-test-images"
+os.environ["IMAGE_STORAGE_DIR"] = TEST_IMAGE_STORAGE_DIR
 os.environ.setdefault("MEDIA_BASE_URL", "http://localhost:8000/media")
 os.makedirs(TEST_IMAGE_STORAGE_DIR, exist_ok=True)
 
