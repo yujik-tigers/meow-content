@@ -1,5 +1,8 @@
+from typing import cast
+
 import pytest
 
+from app.analyzer.cat_fact_analyzer import cat_fact_analyzer
 from app.analyzer.daily_quote_analyzer import daily_quote_analyzer
 from app.analyzer.factory import AnalyzerFactory
 from app.analyzer.literal_quote_analyzer import literal_quote_analyzer
@@ -24,7 +27,12 @@ def test_get_analyzer_for_literal_quote() -> None:
     )
 
 
+def test_get_analyzer_for_fact() -> None:
+    """fact 타입 요청 시 cat_fact_analyzer 싱글턴을 반환한다."""
+    assert AnalyzerFactory.get_analyzer(ContentType.FACT) is cat_fact_analyzer
+
+
 def test_get_analyzer_raises_for_unsupported_content_type() -> None:
     """분석을 지원하지 않는 콘텐츠 타입이면 예외가 발생한다."""
     with pytest.raises(ValueError, match="Unsupported content type"):
-        AnalyzerFactory.get_analyzer(ContentType.FACT)
+        AnalyzerFactory.get_analyzer(cast(ContentType, "unsupported"))

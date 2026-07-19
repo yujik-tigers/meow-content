@@ -9,6 +9,7 @@ from langchain_core.tracers.context import register_configure_hook
 
 from app.exceptions import ContentNotFoundError, NoApprovedContentError
 from app.repository.mysql.engine import create_tables
+from app.repository.qdrant.engine import ensure_cat_fact_collection
 from app.router.admin import router as admin_router
 from app.router.content import router as contents_router
 from app.scheduler import create_scheduler
@@ -29,6 +30,7 @@ register_configure_hook(usage_handler_var, inheritable=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
+    await ensure_cat_fact_collection()
     scheduler = create_scheduler()
     scheduler.start()
     yield

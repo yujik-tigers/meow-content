@@ -22,6 +22,7 @@ _DAILY_CONTENT_ROTATION: dict[int, ContentType] = {
     0: ContentType.REDDIT_MEME,
     1: ContentType.QUOTE,
     2: ContentType.LiteralQuote,
+    3: ContentType.FACT,
 }
 
 
@@ -59,7 +60,8 @@ class MySQLContentRepository(ContentRepository):
         quote_texts = [
             c.content
             for c in contents
-            if c.type in (ContentType.QUOTE, ContentType.LiteralQuote) and c.content
+            if c.type in (ContentType.QUOTE, ContentType.LiteralQuote, ContentType.FACT)
+            and c.content
         ]
         existing_contents: set[str] = set()
         if quote_texts:
@@ -137,7 +139,7 @@ class MySQLContentRepository(ContentRepository):
     @override
     @transactional
     async def reserve_daily_content(self, used_at: date) -> Content:
-        content_type = _DAILY_CONTENT_ROTATION[used_at.day % 3]
+        content_type = _DAILY_CONTENT_ROTATION[used_at.day % 4]
 
         result = await self._session.exec(
             select(ContentRecord)

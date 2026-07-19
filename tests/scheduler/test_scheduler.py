@@ -49,6 +49,11 @@ async def _seed_approved_contents(db_session) -> None:
                 title="Casablanca",
                 literal_type=LiteralType.MOVIE,
             ),
+            ContentRecord(
+                type=ContentType.FACT,
+                status=ContentStatus.APPROVED,
+                content="Cats have five toes on their front paws.",
+            ),
         ]
     )
     await db_session.commit()

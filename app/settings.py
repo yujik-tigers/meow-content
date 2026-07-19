@@ -16,7 +16,10 @@ class Settings(BaseSettings):
 
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
-    QDRANT_COLLECTION: str = "meme_keywords"
+    QDRANT_FACT_COLLECTION: str
+
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    FACT_SIMILARITY_THRESHOLD: float
 
     MYSQL_URL: str
 

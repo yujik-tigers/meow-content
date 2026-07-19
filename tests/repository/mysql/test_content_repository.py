@@ -183,10 +183,32 @@ async def test_create_contents_dedups_literal_quote_by_text(content_repository) 
     }
 
 
-async def test_reserve_daily_content_rotates_across_three_types(
+async def test_create_contents_dedups_fact_by_text(content_repository) -> None:
+    """fact도 quote와 마찬가지로 동일 텍스트가 중복 저장되지 않는다."""
+    await content_repository.create_contents(
+        [
+            NewContent(type=ContentType.FACT, content="Known cat fact"),
+        ]
+    )
+
+    inserted = await content_repository.create_contents(
+        [
+            NewContent(type=ContentType.FACT, content="Known cat fact"),
+            NewContent(type=ContentType.FACT, content="Fresh cat fact"),
+        ]
+    )
+
+    assert inserted == 1
+    facts = await content_repository.fetch_contents_by(
+        ContentStatus.RAW, ContentType.FACT, 0, 10
+    )
+    assert {c.content for c in facts} == {"Known cat fact", "Fresh cat fact"}
+
+
+async def test_reserve_daily_content_rotates_across_four_types(
     content_repository,
 ) -> None:
-    """day % 3 로테이션에 맞춰 reddit_meme/quote/literal_quote를 순서대로 예약한다."""
+    """day % 4 로테이션에 맞춰 reddit_meme/quote/literal_quote/fact를 순서대로 예약한다."""
     await content_repository.create_contents(
         [
             NewContent(
@@ -203,28 +225,33 @@ async def test_reserve_daily_content_rotates_across_three_types(
                 title="Casablanca",
                 literal_type=LiteralType.MOVIE,
             ),
+            NewContent(type=ContentType.FACT, content="Rotation cat fact"),
         ]
     )
     for content_type in (
         ContentType.REDDIT_MEME,
         ContentType.QUOTE,
         ContentType.LiteralQuote,
+        ContentType.FACT,
     ):
         raw = await content_repository.fetch_contents_by(
             ContentStatus.RAW, content_type, 0, 10
         )
         await content_repository.update_status(raw[0].id, ContentStatus.APPROVED)
 
-    reddit_meme_day = await content_repository.reserve_daily_content(date(2026, 7, 3))
+    reddit_meme_day = await content_repository.reserve_daily_content(date(2026, 7, 4))
     assert reddit_meme_day.type == ContentType.REDDIT_MEME
 
-    quote_day = await content_repository.reserve_daily_content(date(2026, 7, 4))
+    quote_day = await content_repository.reserve_daily_content(date(2026, 7, 5))
     assert quote_day.type == ContentType.QUOTE
 
     literal_quote_day = await content_repository.reserve_daily_content(
-        date(2026, 7, 5)
+        date(2026, 7, 6)
     )
     assert literal_quote_day.type == ContentType.LiteralQuote
+
+    fact_day = await content_repository.reserve_daily_content(date(2026, 7, 7))
+    assert fact_day.type == ContentType.FACT
 
 
 async def test_reserve_daily_content_raises_when_bucket_has_no_approved_content(

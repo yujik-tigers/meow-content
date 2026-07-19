@@ -255,7 +255,7 @@ def regenerate_image(
 
 
 def trigger_scraping(base_url: str) -> None:
-    for content_type in ("reddit_meme", "quote", "literal_quote"):
+    for content_type in ("reddit_meme", "quote", "literal_quote", "fact"):
         resp = requests.post(
             f"{base_url}/api/v1/admin/scrap",
             json={"content_type": content_type},

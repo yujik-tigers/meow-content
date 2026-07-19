@@ -1,6 +1,7 @@
 import pytest
 
 from app.enums import ContentType, GptImageModel, NanoBananaModel
+from app.image_generator.cat_fact_image_generator import CatFactImageGenerator
 from app.image_generator.daily_quote_image_generator import DailyQuoteImageGenerator
 from app.image_generator.diffusion_model import GptImage2, NanoBanana
 from app.image_generator.factory import ImageGeneratorFactory
@@ -43,6 +44,15 @@ def test_get_image_generator_for_literal_quote():
     )
 
     assert isinstance(generator, LiteralQuoteImageGenerator)
+
+
+def test_get_image_generator_for_fact():
+    """fact 타입 요청 시 CatFactImageGenerator를 반환한다."""
+    generator = ImageGeneratorFactory.get_image_generator(
+        ContentType.FACT, GptImageModel.GPT_IMAGE_2
+    )
+
+    assert isinstance(generator, CatFactImageGenerator)
 
 
 def test_get_image_generator_raises_for_unsupported_content_type():

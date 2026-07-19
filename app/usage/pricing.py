@@ -17,6 +17,7 @@ MODEL_PRICING: dict[str, ModelPricing] = {
         input_per_million=0.5, output_per_million=60.0
     ),
     "gemini-3-pro-image": ModelPricing(input_per_million=2.0, output_per_million=120.0),
+    "text-embedding-3-small": ModelPricing(input_per_million=0.02, output_per_million=0.0),
 }
 
 # Daily free token allowance (input + output combined), keyed the same way as
