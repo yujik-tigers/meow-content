@@ -204,8 +204,8 @@ def generate_image(base_url: str, content_id: int, content_type: str, model: str
     return resp.json().get("content", {})
 
 
-def trigger_scraping(base_url: str) -> None:
-    for content_type in ("reddit_meme", "quote", "literal_quote", "fact"):
+def trigger_scraping(base_url: str, content_types: list[str]) -> None:
+    for content_type in content_types:
         resp = requests.post(
             f"{base_url}/api/v1/admin/scrap",
             json={"content_type": content_type},
@@ -272,10 +272,18 @@ def render_sidebar() -> None:
         )
 
         st.divider()
-        if st.button("지금 스크래핑 실행", use_container_width=True):
+        scrap_types = st.multiselect(
+            "스크래핑 대상",
+            options=ALL_CONTENT_TYPES,
+            default=ALL_CONTENT_TYPES,
+            key="scrap_content_types",
+        )
+        if st.button(
+            "지금 스크래핑 실행", use_container_width=True, disabled=not scrap_types
+        ):
             with st.spinner("스크래핑 실행 중..."):
                 try:
-                    trigger_scraping(str(st.session_state.base_url))
+                    trigger_scraping(str(st.session_state.base_url), scrap_types)
                     st.success("스크래핑 완료. RAW 콘텐츠 목록을 확인하세요.")
                     fetch_contents.clear()
                 except requests.exceptions.RequestException as e:

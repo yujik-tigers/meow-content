@@ -1109,6 +1109,10 @@ def _extract_quote_candidates(film_wikitext: str) -> list[tuple[str, str]]:
     return candidates
 
 
+def _strip_disambiguation(title: str) -> str:
+    return re.sub(r"\s*\([^()]*\)\s*$", "", title)
+
+
 class WikiquoteMovieScraper(Scraper):
     async def _fetch_wikitext(
         self, client: httpx.AsyncClient, title: str
@@ -1151,12 +1155,13 @@ class WikiquoteMovieScraper(Scraper):
             chosen = random.sample(
                 candidates, min(len(candidates), _MAX_QUOTES_PER_FILM)
             )
+            display_title = _strip_disambiguation(film_title)
             return [
                 NewContent(
                     type=ContentType.LiteralQuote,
                     content=line,
                     author=author,
-                    title=film_title,
+                    title=display_title,
                     literal_type=LiteralType.MOVIE,
                 )
                 for author, line in chosen
