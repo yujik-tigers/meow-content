@@ -679,7 +679,7 @@ def render_fields(item: dict) -> None:
 
     elif content_type == "literal_quote":
         if item.get("title"):
-            st.markdown(f"**작품:** {item['title']} ({item.get('literal_type', '')})")
+            st.markdown(f"**작품:** {item['title']}")
         if item.get("content"):
             st.markdown(f"**인용:** {item['content']}")
         if item.get("content_translation"):
