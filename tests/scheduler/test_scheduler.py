@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -60,7 +60,7 @@ async def _seed_approved_contents(db_session) -> None:
 
 
 async def test_daily_content_job_success(patch_get_repository, db_session) -> None:
-    """일일 잡이 승인된 콘텐츠 하나를 오늘 날짜(KST)로 예약(USED) 처리한다."""
+    """일일 잡이 승인된 콘텐츠 하나를 다음날 날짜(KST)로 예약(USED) 처리한다."""
     await _seed_approved_contents(db_session)
 
     await _daily_content_job()
@@ -71,7 +71,8 @@ async def test_daily_content_job_success(patch_get_repository, db_session) -> No
         )
     ).all()
     assert len(used) == 1
-    assert used[0].used_at == datetime.now(ZoneInfo("Asia/Seoul")).date()
+    tomorrow = datetime.now(ZoneInfo("Asia/Seoul")).date() + timedelta(days=1)
+    assert used[0].used_at == tomorrow
 
 
 async def test_daily_content_job_no_approved_raises(patch_get_repository) -> None:

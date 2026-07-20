@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -14,21 +14,23 @@ _KST = ZoneInfo("Asia/Seoul")
 
 
 async def _daily_content_job() -> None:
-    today = datetime.now(_KST).date()
+    target_date = datetime.now(_KST).date() + timedelta(days=1)
     logger.info(
-        "Running daily content reservation job for %s", today.strftime("%y-%m-%d")
+        "Running daily content reservation job for %s", target_date.strftime("%y-%m-%d")
     )
     try:
         async with get_repository() as repo:
-            content = await repo.reserve_daily_content(today)
+            content = await repo.reserve_daily_content(target_date)
     except NoApprovedContentError:
         logger.error(
             "No APPROVED content available to reserve for %s",
-            today.strftime("%y-%m-%d"),
+            target_date.strftime("%y-%m-%d"),
             exc_info=True,
         )
         raise
-    logger.info("Reserved content id=%d for %s", content.id, today.strftime("%y-%m-%d"))
+    logger.info(
+        "Reserved content id=%d for %s", content.id, target_date.strftime("%y-%m-%d")
+    )
 
 
 def create_scheduler() -> AsyncIOScheduler:
